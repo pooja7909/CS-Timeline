@@ -351,6 +351,8 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                             className={`w-full text-sm font-sans border rounded-xl p-3 resize overflow-auto focus:bg-white focus:ring-2 focus:outline-hidden leading-relaxed min-h-[72px] shadow-2xs transition-colors ${
                               shouldCrossText
                                 ? 'line-through decoration-emerald-600/70 text-slate-500 bg-emerald-50/20 border-emerald-200 focus:border-emerald-500 focus:ring-emerald-400/30'
+                                : shouldHighlight
+                                ? 'text-slate-900 bg-emerald-50/20 border-emerald-300/80 hover:border-emerald-400 focus:border-emerald-600 focus:ring-emerald-500/30'
                                 : 'text-slate-900 bg-white border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-indigo-400/30'
                             }`}
                             placeholder="Enter curriculum topics and what will be covered in lesson..."
@@ -361,6 +363,8 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                         <p className={`text-sm font-sans leading-relaxed whitespace-pre-wrap ${
                           shouldCrossText
                             ? 'line-through decoration-emerald-600/70 text-slate-500 font-normal'
+                            : isCellCompleted
+                            ? 'text-slate-900 font-medium'
                             : 'text-slate-800'
                         }`}>
                           {cell.text || <span className="text-slate-400 italic">No syllabus specified</span>}
