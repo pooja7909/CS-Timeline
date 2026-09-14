@@ -546,9 +546,7 @@ export const StudentView: React.FC<StudentViewProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-xs font-mono-code text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl font-semibold border border-slate-200">
-                ★ {allAssessments.length} Assessments Mapped
-              </span>
+             
               <span className="text-xs font-mono-code text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl font-semibold border border-slate-200">
                 38 Teaching Weeks
               </span>
