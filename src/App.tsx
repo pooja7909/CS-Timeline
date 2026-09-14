@@ -141,12 +141,12 @@ export default function App() {
         return saved;
       }
     } catch {}
-    return 'both';
+    return 'highlight';
   });
 
   const handleToggleCompletionDisplayMode = () => {
     setCompletionDisplayMode(prev => {
-      const next: CompletionDisplayMode = prev === 'both' ? 'strike' : prev === 'strike' ? 'highlight' : 'both';
+      const next: CompletionDisplayMode = prev === 'highlight' ? 'both' : prev === 'both' ? 'strike' : 'highlight';
       try {
         localStorage.setItem('curriculum_completion_mode', next);
       } catch {}
@@ -885,6 +885,7 @@ export default function App() {
               onLogoutTeacher={handleTeacherLogout}
               visibilitySettings={studentVisibility}
               reportDates={reportDates}
+              completionDisplayMode={completionDisplayMode}
               onToggleWeekComplete={handleToggleWeekComplete}
               onEditBreak={handleOpenEditBreak}
               onDeleteBreak={handleDeleteBreak}
