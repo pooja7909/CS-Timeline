@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TermData, YearConfig, CellData, UserRole, LockState, BreakRow } from '../types';
+import { TermData, YearConfig, CellData, UserRole, LockState, BreakRow, CompletionDisplayMode } from '../types';
 import { 
   Calendar, 
   Star, 
@@ -29,6 +29,9 @@ interface TimelineViewProps {
   currentWeekKey: string | null;
   onUpdateCell: (termId: string, weekN: number, yearId: string, updates: Partial<CellData>) => void;
   onUpdateNote?: (termId: string, weekN: number, note: string) => void;
+  onToggleWeekComplete?: (termId: string, weekN: number) => void;
+  onToggleCellTaught?: (termId: string, weekN: number, yearId: string) => void;
+  completionDisplayMode?: CompletionDisplayMode;
   onOpenAiHelper?: (cell: {
     termId: string;
     weekN: number;
@@ -56,6 +59,9 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   currentWeekKey,
   onUpdateCell,
   onUpdateNote,
+  onToggleWeekComplete,
+  onToggleCellTaught,
+  completionDisplayMode = 'both',
   onOpenAiHelper,
   onOpenAIHelper,
   onEditBreak,
@@ -261,6 +267,10 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                 const weekKey = `${term.id}-${row.n}`;
                 const isCurrent = currentWeekKey === weekKey;
                 const isAssessed = !!cell.assess;
+                const isWeekCompleted = !!row.completed;
+                const isCellCompleted = isWeekCompleted || !!cell.taught;
+                const shouldCrossText = isCellCompleted && (completionDisplayMode === 'both' || completionDisplayMode === 'strike');
+                const shouldHighlight = isCellCompleted && (completionDisplayMode === 'both' || completionDisplayMode === 'highlight');
 
                 return (
                   <div
@@ -271,7 +281,9 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                     {/* Node Dot */}
                     <div
                       className={`absolute -left-6 sm:-left-8 top-4 w-4 h-4 rounded-full border-2 border-white shadow-xs transition-transform group-hover:scale-125 ${
-                        isCurrent
+                        isWeekCompleted
+                          ? 'bg-emerald-600 ring-4 ring-emerald-100'
+                          : isCurrent
                           ? 'bg-indigo-600 ring-4 ring-indigo-100'
                           : isAssessed
                           ? 'bg-rose-500'
@@ -282,7 +294,9 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                     {/* Timeline Card */}
                     <div
                       className={`p-5 rounded-2xl border transition-all ${
-                        isCurrent
+                        shouldHighlight
+                          ? 'bg-emerald-50/30 border-emerald-300 ring-2 ring-emerald-500/20 shadow-xs'
+                          : isCurrent
                           ? 'bg-indigo-50/40 border-indigo-300 shadow-xs ring-2 ring-indigo-500/20'
                           : isAssessed
                           ? 'bg-rose-50/30 border-rose-200'
@@ -291,7 +305,11 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono-code font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md">
+                          <span className={`text-xs font-mono-code font-bold px-2 py-0.5 rounded-md ${
+                            isWeekCompleted
+                              ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                              : 'text-slate-900 bg-slate-100'
+                          }`}>
                             Week {row.n}
                           </span>
                           <span className="text-xs font-mono-code text-slate-500">
@@ -304,27 +322,47 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                           )}
                         </div>
 
-                        {/* Assessment indicator */}
-                        {isAssessed && (
-                          <span className="text-xs font-bold font-mono-code text-rose-700 bg-rose-100/80 border border-rose-200 px-2 py-0.5 rounded-md flex items-center gap-1">
-                            <Star className="w-3 h-3 fill-rose-600 text-rose-600" />
-                            Milestone / Assessment
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {/* Week Completed Badge */}
+                          {isWeekCompleted && (
+                            <span className="text-xs font-bold font-mono-code text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-2 py-0.5 rounded-md flex items-center gap-1 shadow-2xs">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              Completed
+                            </span>
+                          )}
+
+                          {/* Assessment indicator */}
+                          {isAssessed && (
+                            <span className="text-xs font-bold font-mono-code text-rose-700 bg-rose-100/80 border border-rose-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                              <Star className="w-3 h-3 fill-rose-600 text-rose-600" />
+                              Milestone / Assessment
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {/* Content */}
                       {isEditable ? (
-                        <textarea
-                          value={cell.text}
-                          onChange={(e) => onUpdateCell(term.id, row.n, activeYearId, { text: e.target.value })}
-                          rows={3}
-                          className="w-full text-sm font-sans text-slate-900 bg-white border border-slate-200 hover:border-slate-300 focus:border-indigo-500 rounded-xl p-3 resize overflow-auto focus:bg-white focus:ring-2 focus:ring-indigo-400/30 focus:outline-hidden leading-relaxed min-h-[72px] shadow-2xs"
-                          placeholder="Enter curriculum topics and what will be covered in lesson..."
-                          title="Drag right corner to adjust size"
-                        />
+                        <div className="relative">
+                          <textarea
+                            value={cell.text}
+                            onChange={(e) => onUpdateCell(term.id, row.n, activeYearId, { text: e.target.value })}
+                            rows={3}
+                            className={`w-full text-sm font-sans border rounded-xl p-3 resize overflow-auto focus:bg-white focus:ring-2 focus:outline-hidden leading-relaxed min-h-[72px] shadow-2xs transition-colors ${
+                              shouldCrossText
+                                ? 'line-through decoration-emerald-600/70 text-slate-500 bg-emerald-50/20 border-emerald-200 focus:border-emerald-500 focus:ring-emerald-400/30'
+                                : 'text-slate-900 bg-white border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-indigo-400/30'
+                            }`}
+                            placeholder="Enter curriculum topics and what will be covered in lesson..."
+                            title="Drag right corner to adjust size"
+                          />
+                        </div>
                       ) : (
-                        <p className="text-sm font-sans text-slate-800 leading-relaxed whitespace-pre-wrap">
+                        <p className={`text-sm font-sans leading-relaxed whitespace-pre-wrap ${
+                          shouldCrossText
+                            ? 'line-through decoration-emerald-600/70 text-slate-500 font-normal'
+                            : 'text-slate-800'
+                        }`}>
                           {cell.text || <span className="text-slate-400 italic">No syllabus specified</span>}
                         </p>
                       )}
@@ -359,25 +397,62 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
 
                       {/* Teacher Actions */}
                       {isEditable && (
-                        <div className="flex items-center justify-end gap-2 mt-2 pt-2 border-t border-slate-100">
-                          <button
-                            onClick={() => onUpdateCell(term.id, row.n, activeYearId, { assess: !cell.assess })}
-                            className={`text-xs font-bold px-2 py-1 rounded transition-colors cursor-pointer flex items-center gap-1 ${
-                              cell.assess
-                                ? 'bg-rose-100 text-rose-700'
-                                : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50'
-                            }`}
-                          >
-                            <Star className={`w-3 h-3 ${cell.assess ? 'fill-rose-600' : ''}`} />
-                            {cell.assess ? 'Remove Assessment' : 'Mark as Assessment'}
-                          </button>
-                          <button
-                            onClick={() => handleTriggerAI(term.id, row.n, activeYearId, currentYear.label, term.name, cell.text)}
-                            className="text-xs font-bold text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded transition-colors flex items-center gap-1 cursor-pointer"
-                          >
-                            <Sparkles className="w-3 h-3" />
-                            AI Assist
-                          </button>
+                        <div className="flex flex-wrap items-center justify-between gap-2 mt-2 pt-2 border-t border-slate-100">
+                          {/* Week and Lesson Completion Controls */}
+                          <div className="flex items-center gap-2">
+                            {onToggleWeekComplete && (
+                              <button
+                                type="button"
+                                onClick={() => onToggleWeekComplete(term.id, row.n)}
+                                className={`text-xs font-bold px-2.5 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                                  isWeekCompleted
+                                    ? 'bg-emerald-100 text-emerald-900 border border-emerald-300 hover:bg-emerald-200 shadow-2xs'
+                                    : 'text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 border border-slate-200'
+                                }`}
+                                title={isWeekCompleted ? 'Week marked as complete. Click to undo.' : 'Mark this week as completed'}
+                              >
+                                <CheckCircle2 className={`w-3.5 h-3.5 ${isWeekCompleted ? 'text-emerald-600 fill-emerald-100' : 'text-slate-400'}`} />
+                                <span>{isWeekCompleted ? 'Completed ✓ (Undo)' : 'Mark Week Complete'}</span>
+                              </button>
+                            )}
+
+                            {onToggleCellTaught && (
+                              <button
+                                type="button"
+                                onClick={() => onToggleCellTaught(term.id, row.n, activeYearId)}
+                                className={`text-xs font-bold px-2 py-1 rounded-lg transition-colors cursor-pointer flex items-center gap-1 ${
+                                  cell.taught
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                    : 'text-slate-500 hover:text-emerald-700 hover:bg-emerald-50'
+                                }`}
+                                title={cell.taught ? 'Cohort lesson marked taught (Click to toggle)' : 'Mark cohort lesson as taught'}
+                              >
+                                <CheckCircle2 className={`w-3 h-3 ${cell.taught ? 'text-emerald-600' : 'text-slate-400'}`} />
+                                <span>{cell.taught ? 'Cohort Taught ✓' : 'Mark Cohort Taught'}</span>
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => onUpdateCell(term.id, row.n, activeYearId, { assess: !cell.assess })}
+                              className={`text-xs font-bold px-2 py-1 rounded transition-colors cursor-pointer flex items-center gap-1 ${
+                                cell.assess
+                                  ? 'bg-rose-100 text-rose-700'
+                                  : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50'
+                              }`}
+                            >
+                              <Star className={`w-3 h-3 ${cell.assess ? 'fill-rose-600' : ''}`} />
+                              {cell.assess ? 'Remove Assessment' : 'Mark as Assessment'}
+                            </button>
+                            <button
+                              onClick={() => handleTriggerAI(term.id, row.n, activeYearId, currentYear.label, term.name, cell.text)}
+                              className="text-xs font-bold text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded transition-colors flex items-center gap-1 cursor-pointer"
+                            >
+                              <Sparkles className="w-3 h-3" />
+                              AI Assist
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
