@@ -56,6 +56,7 @@ interface StudentViewProps {
   visibilitySettings?: StudentVisibilitySettings;
   reportDates?: YearReportDate[];
   onToggleWeekComplete?: (termId: string, weekN: number) => void;
+  completionDisplayMode?: 'both' | 'strike' | 'highlight';
   onEditBreak?: (termId: string, breakItem: BreakRow, positionIdx: number) => void;
   onDeleteBreak?: (termId: string, positionIdx: number) => void;
   onToggleBreakVisibility?: (termId: string, positionIdx: number, newVisibility: boolean) => void;
@@ -84,6 +85,7 @@ export const StudentView: React.FC<StudentViewProps> = ({
   visibilitySettings,
   reportDates = [],
   onToggleWeekComplete,
+  completionDisplayMode = 'highlight',
   onEditBreak,
   onDeleteBreak,
   onToggleBreakVisibility,
@@ -492,12 +494,14 @@ export const StudentView: React.FC<StudentViewProps> = ({
         <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs">
           <MatrixView
             plan={plan}
+            years={years}
             selectedYears={[selectedYear.id]}
             searchQuery=""
             assessOnly={false}
             reportOnly={false}
             userRole={userRole}
             isLocked={true}
+            completionDisplayMode={completionDisplayMode}
             onUpdateCell={() => {}}
             onUpdateNote={() => {}}
             onSelectYear={onSelectYear}
@@ -811,6 +815,7 @@ export const StudentView: React.FC<StudentViewProps> = ({
                         const hasAssess = cell.assess || cell.text.toLowerCase().includes('assessment') || cell.text.toLowerCase().includes('exam') || cell.text.toLowerCase().includes('test') || cell.text.toLowerCase().includes('mock') || cell.text.toLowerCase().includes('criterion');
                         const isWeekCompleted = !!row.completed;
                         const isCellCompleted = isWeekCompleted || !!cell.taught;
+                        const shouldCrossText = isCellCompleted && (completionDisplayMode === 'both' || completionDisplayMode === 'strike');
 
                         return (
                           <div 
@@ -871,8 +876,10 @@ export const StudentView: React.FC<StudentViewProps> = ({
                                   </span>
                                 )}
                                 <div className={`text-base leading-relaxed whitespace-pre-wrap ${
-                                  isCellCompleted
+                                  shouldCrossText
                                     ? 'line-through decoration-emerald-600/70 text-slate-500 font-normal'
+                                    : isCellCompleted
+                                    ? 'text-slate-900 font-medium'
                                     : hasAssess 
                                     ? 'text-rose-950 font-bold' 
                                     : 'text-slate-900 font-semibold'
