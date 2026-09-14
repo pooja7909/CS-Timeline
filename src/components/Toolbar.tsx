@@ -1,5 +1,5 @@
 import React from 'react';
-import { ViewMode, UserRole, LockState } from '../types';
+import { ViewMode, UserRole, LockState, CompletionDisplayMode } from '../types';
 import { YEARS } from '../data/defaultPlan';
 import { 
   LayoutGrid, 
@@ -20,7 +20,8 @@ import {
   CheckCheck,
   FileCheck2,
   Sliders,
-  Eye
+  Eye,
+  CheckCircle2
 } from 'lucide-react';
 
 interface ToolbarProps {
@@ -35,6 +36,8 @@ interface ToolbarProps {
   onToggleAssessOnly: () => void;
   reportOnly: boolean;
   onToggleReportOnly: () => void;
+  completionDisplayMode?: CompletionDisplayMode;
+  onToggleCompletionDisplayMode?: () => void;
   userRole: UserRole;
   onToggleRole: () => void;
   lockState?: LockState;
@@ -58,6 +61,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onToggleAssessOnly,
   reportOnly,
   onToggleReportOnly,
+  completionDisplayMode = 'both',
+  onToggleCompletionDisplayMode,
   userRole,
   onToggleRole,
   lockState = { isLocked: false, hasPin: true },
@@ -218,6 +223,31 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             <FileCheck2 className={`w-4 h-4 ${reportOnly ? 'text-indigo-600' : 'text-slate-400'}`} />
             <span className="hidden sm:inline">Report Weeks</span>
           </button>
+
+          {/* Completion Style Mode Toggle (Teacher Mode) */}
+          {userRole === 'teacher' && onToggleCompletionDisplayMode && (
+            <button
+              onClick={onToggleCompletionDisplayMode}
+              title={`Completed Weeks Display: ${
+                completionDisplayMode === 'both' ? 'Crossed out & Highlighted' :
+                completionDisplayMode === 'strike' ? 'Crossed out only' :
+                'Highlighted only'
+              } (Click to toggle style)`}
+              className="px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100/80 cursor-pointer shadow-2xs"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span className="hidden md:inline">
+                {completionDisplayMode === 'both' ? 'Style: Cross + Highlight' :
+                 completionDisplayMode === 'strike' ? 'Style: Strike only' :
+                 'Style: Highlight only'}
+              </span>
+              <span className="md:hidden">
+                {completionDisplayMode === 'both' ? 'Cross+Color' :
+                 completionDisplayMode === 'strike' ? 'Cross' :
+                 'Highlight'}
+              </span>
+            </button>
+          )}
 
           {/* Lock / Unlock Toggle Button */}
           <button
