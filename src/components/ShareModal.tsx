@@ -6,6 +6,7 @@ interface ShareModalProps {
   isOpen: boolean;
   onClose: () => void;
   isLocked: boolean;
+  selectedYears?: string[];
   initialYear?: string;
 }
 
@@ -13,16 +14,38 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   isOpen,
   onClose,
   isLocked,
+  selectedYears: activeSelectedYears,
   initialYear
 }) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const [selectedYear, setSelectedYear] = useState<string>(initialYear || 'all');
+
+  // Compute what year should be selected by default based on what is currently selected in the curriculum
+  const computeInitialYear = () => {
+    if (initialYear && initialYear !== 'all') return initialYear;
+    if (activeSelectedYears && activeSelectedYears.length === 1) {
+      return activeSelectedYears[0];
+    }
+    if (activeSelectedYears && activeSelectedYears.length > 0 && activeSelectedYears.length < YEARS.length) {
+      return activeSelectedYears[0];
+    }
+    return 'all';
+  };
+
+  const [selectedYear, setSelectedYear] = useState<string>(computeInitialYear);
 
   useEffect(() => {
-    if (initialYear) {
-      setSelectedYear(initialYear);
+    if (isOpen) {
+      if (initialYear && initialYear !== 'all') {
+        setSelectedYear(initialYear);
+      } else if (activeSelectedYears && activeSelectedYears.length === 1) {
+        setSelectedYear(activeSelectedYears[0]);
+      } else if (activeSelectedYears && activeSelectedYears.length > 0 && activeSelectedYears.length < YEARS.length) {
+        setSelectedYear(activeSelectedYears[0]);
+      } else if (initialYear === 'all' || (activeSelectedYears && activeSelectedYears.length === YEARS.length)) {
+        setSelectedYear('all');
+      }
     }
-  }, [initialYear, isOpen]);
+  }, [initialYear, activeSelectedYears, isOpen]);
 
   if (!isOpen) return null;
 
@@ -92,15 +115,20 @@ export const ShareModal: React.FC<ShareModalProps> = ({
 
         {/* Year Filter for Student Link */}
         <div className="mb-4">
-          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-            Target Year Group:
-          </label>
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Target Year Group:
+            </label>
+            <span className="text-[11px] font-medium text-slate-500">
+              {selectedYear === 'all' ? 'All years included' : `Sharing ${YEARS.find(y => y.id === selectedYear)?.label} only`}
+            </span>
+          </div>
           <div className="flex flex-wrap gap-1.5">
             <button
               onClick={() => setSelectedYear('all')}
-              className={`px-3 py-1 text-xs rounded-lg font-mono-code font-semibold transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 text-xs rounded-lg font-mono-code font-bold transition-all cursor-pointer ${
                 selectedYear === 'all'
-                  ? 'bg-slate-900 text-white shadow-xs'
+                  ? 'bg-slate-900 text-white shadow-xs ring-2 ring-slate-400'
                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
@@ -110,9 +138,9 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               <button
                 key={y.id}
                 onClick={() => setSelectedYear(y.id)}
-                className={`px-3 py-1 text-xs rounded-lg font-mono-code font-semibold transition-colors cursor-pointer ${
+                className={`px-3 py-1.5 text-xs rounded-lg font-mono-code font-bold transition-all cursor-pointer ${
                   selectedYear === y.id
-                    ? 'bg-indigo-600 text-white shadow-xs font-bold ring-2 ring-indigo-300'
+                    ? 'bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-400'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
@@ -129,14 +157,16 @@ export const ShareModal: React.FC<ShareModalProps> = ({
             <div className="flex items-center justify-between mb-1.5">
               <span className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
                 <GraduationCap className="w-4 h-4 text-emerald-600" />
-                Student & Parent Link ({selectedYear === 'all' ? 'All Years' : YEARS.find(y => y.id === selectedYear)?.label})
+                Student Link — {selectedYear === 'all' ? 'All Year Groups (Y7–13)' : `${YEARS.find(y => y.id === selectedYear)?.label} Only`}
               </span>
               <span className="text-[11px] font-mono-code text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md font-bold border border-emerald-200">
                 100% Read-Only
               </span>
             </div>
             <p className="text-xs text-slate-600 mb-2 font-medium">
-              Share this dedicated link with students and parents. It opens directly to the clean curriculum viewer with all teacher editing controls and staff logins completely stripped away.
+              {selectedYear === 'all'
+                ? 'Shares the entire curriculum across all year levels (Y7–13) with no teacher logins or editing tools.'
+                : `Dedicated link for ${YEARS.find(y => y.id === selectedYear)?.label} students and parents. Opens directly locked to ${YEARS.find(y => y.id === selectedYear)?.label} with other year groups hidden.`}
             </p>
             <div className="flex items-center gap-2">
               <input
