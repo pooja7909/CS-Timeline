@@ -388,7 +388,7 @@ export const StudentView: React.FC<StudentViewProps> = ({
             </label>
             {activeYearList.length === 1 && userRole !== 'teacher' && (
               <span className="text-[11px] font-mono-code text-emerald-300 font-bold bg-emerald-950/40 border border-emerald-500/30 px-2 py-0.5 rounded-md">
-                Dedicated {selectedYear.label} Curriculum View
+                 {selectedYear.label} Curriculum View
               </span>
             )}
             {userRole === 'teacher' && visibilitySettings && (
