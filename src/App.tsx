@@ -880,6 +880,7 @@ export default function App() {
               onOpenStaffLogin={() => setIsTeacherAuthOpen(true)}
               userRole={userRole}
               isTeacherAuthenticated={isTeacherAuthenticated}
+              lockedToYear={new URLSearchParams(window.location.search).get('year')}
               onReturnToTeacherPage={() => setUserRole('teacher')}
               onLogoutTeacher={handleTeacherLogout}
               visibilitySettings={studentVisibility}
@@ -908,6 +909,7 @@ export default function App() {
               isManualWeek={isManualWeek}
               overviewSettings={overviewSettings}
               isTeacherAuthenticated={isTeacherAuthenticated}
+              selectedYears={selectedYears}
               onJumpCurrentWeek={handleJumpCurrentWeek}
               onOpenActiveWeekModal={() => setIsActiveWeekModalOpen(true)}
               onOpenOverviewModal={() => setIsOverviewModalOpen(true)}
@@ -1044,7 +1046,8 @@ export default function App() {
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
         isLocked={isLocked}
-        initialYear={selectedYears.length === 1 ? selectedYears[0] : 'all'}
+        selectedYears={selectedYears}
+        initialYear={selectedYears.length === 1 ? selectedYears[0] : (selectedYears.length > 0 && selectedYears.length < YEARS.length ? selectedYears[0] : 'all')}
       />
 
       <StatsModal
