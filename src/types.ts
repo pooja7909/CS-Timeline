@@ -38,12 +38,16 @@ export interface CellData {
   resources?: string[];
 }
 
+export type CompletionDisplayMode = 'both' | 'strike' | 'highlight';
+
 export interface WeekRow {
   kind: 'week';
   n: number;
   dates: string;
   iso: string;
   flag?: string;
+  completed?: boolean;
+  completedAt?: string;
   cells: Record<string, CellData>;
   note: string;
 }
