@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { TermData, YearConfig, BreakRow, StudentVisibilitySettings, YearReportDate, UserRole, PortalOverviewSettings } from '../types';
 import { 
   GraduationCap, 
@@ -50,6 +50,7 @@ interface StudentViewProps {
   // Dynamic teacher controls & visibility settings
   userRole?: UserRole;
   isTeacherAuthenticated?: boolean;
+  lockedToYear?: string | null;
   onReturnToTeacherPage?: () => void;
   onLogoutTeacher?: () => void;
   visibilitySettings?: StudentVisibilitySettings;
@@ -77,6 +78,7 @@ export const StudentView: React.FC<StudentViewProps> = ({
   overviewSettings,
   userRole = 'student',
   isTeacherAuthenticated = false,
+  lockedToYear = null,
   onReturnToTeacherPage,
   onLogoutTeacher,
   visibilitySettings,
@@ -96,10 +98,19 @@ export const StudentView: React.FC<StudentViewProps> = ({
   const [activeTermTab, setActiveTermTab] = useState<string>('all');
   const [activePortalTab, setActivePortalTab] = useState<'timeline' | 'reports' | 'calendar' | 'matrix' | 'roadmap'>('timeline');
 
-  // Filter years based on teacher's visibility settings (if in student role)
-  const allowedYears = userRole === 'teacher' || !visibilitySettings?.visibleYears
-    ? years
-    : years.filter(y => visibilitySettings.visibleYears.includes(y.id));
+  // Filter years based on:
+  // 1. If link is locked to a specific year group (?year=y7 in URL)
+  // 2. Teacher's visibility settings (if in student role)
+  const allowedYears = useMemo(() => {
+    if (userRole !== 'teacher' && lockedToYear) {
+      const match = years.filter(y => y.id === lockedToYear);
+      if (match.length > 0) return match;
+    }
+    if (userRole === 'teacher' || !visibilitySettings?.visibleYears) {
+      return years;
+    }
+    return years.filter(y => visibilitySettings.visibleYears.includes(y.id));
+  }, [years, userRole, lockedToYear, visibilitySettings?.visibleYears]);
 
   // Ensure selected year is in allowed list
   const activeYearList = allowedYears.length > 0 ? allowedYears : years;
@@ -371,8 +382,13 @@ export const StudentView: React.FC<StudentViewProps> = ({
         <div className="mt-6 pt-5 border-t border-white/10">
           <div className="flex items-center justify-between gap-2 mb-3">
             <label className="block text-xs font-mono-code font-bold uppercase tracking-wider text-indigo-200">
-              Choose Your Year Level:
+              {activeYearList.length === 1 ? 'Curriculum Year Level:' : 'Choose Your Year Level:'}
             </label>
+            {activeYearList.length === 1 && userRole !== 'teacher' && (
+              <span className="text-[11px] font-mono-code text-emerald-300 font-bold bg-emerald-950/40 border border-emerald-500/30 px-2 py-0.5 rounded-md">
+                Dedicated {selectedYear.label} Curriculum View
+              </span>
+            )}
             {userRole === 'teacher' && visibilitySettings && (
               <span className="text-[11px] font-mono-code text-indigo-300">
                 {activeYearList.length} of {years.length} Years Published
