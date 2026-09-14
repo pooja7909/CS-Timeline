@@ -258,7 +258,7 @@ export const StudentView: React.FC<StudentViewProps> = ({
                 {isManualWeek ? (
                   <span className="px-1.5 py-0.2 bg-amber-500/30 text-amber-200 border border-amber-400/30 rounded text-[9px] font-bold">Manual</span>
                 ) : (
-                  <span className="px-1.5 py-0.2 bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 rounded text-[9px] font-bold">Auto</span>
+                  <span className="px-1.5 py-0.2 bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 rounded text-[9px] font-bold"></span>
                 )}
               </div>
               <div className="text-base font-bold text-white font-display flex items-center md:justify-end gap-1.5 mt-0.5">
