@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  
+  .font-display {
+    font-family: "Archivo", -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  .font-mono-code {
+    font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+  }
+}
+
+/* Enhanced corner resizer handle for curriculum textareas */
+textarea.resize {
+  resize: both;
+}
+
+textarea::-webkit-resizer {
+  border-width: 7px;
+  border-style: solid;
+  border-color: transparent #94a3b8 #94a3b8 transparent;
+  cursor: nwse-resize;
+}
+
+textarea:hover::-webkit-resizer,
+textarea:focus::-webkit-resizer {
+  border-color: transparent #6366f1 #6366f1 transparent;
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+
+
