@@ -411,6 +411,8 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
                                         className={`w-full text-xs font-sans border rounded-lg p-2 resize overflow-auto focus:bg-white focus:ring-2 focus:outline-hidden leading-relaxed min-h-[68px] shadow-2xs transition-colors ${
                                           shouldCrossText
                                             ? 'line-through decoration-emerald-600/70 text-slate-500 bg-emerald-50/30 border-emerald-200 focus:border-emerald-500 focus:ring-emerald-400/30'
+                                            : shouldHighlightCell
+                                            ? 'text-slate-900 bg-emerald-50/20 border-emerald-300/80 hover:border-emerald-400 focus:border-emerald-600 focus:ring-emerald-500/30'
                                             : 'text-slate-900 bg-white/90 border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-indigo-400/30'
                                         }`}
                                         placeholder="Add lesson content / topic..."
