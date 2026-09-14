@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TermData, YearConfig, CellData, UserRole, LockState, BreakRow } from '../types';
+import { TermData, YearConfig, CellData, UserRole, LockState, BreakRow, CompletionDisplayMode } from '../types';
 import { getReportCyclesForWeek, isReportWeek } from '../data/reportCycles';
 import { 
   Star, 
@@ -19,7 +19,8 @@ import {
   Trash2,
   Plus,
   Eye,
-  EyeOff
+  EyeOff,
+  CheckCircle2
 } from 'lucide-react';
 
 interface MatrixViewProps {
@@ -35,6 +36,9 @@ interface MatrixViewProps {
   currentWeekKey: string | null;
   onUpdateCell: (termId: string, weekN: number, yearId: string, updates: Partial<CellData>) => void;
   onUpdateNote: (termId: string, weekN: number, note: string) => void;
+  onToggleWeekComplete?: (termId: string, weekN: number) => void;
+  onToggleCellTaught?: (termId: string, weekN: number, yearId: string) => void;
+  completionDisplayMode?: CompletionDisplayMode;
   onOpenAiHelper?: (cell: {
     termId: string;
     weekN: number;
@@ -64,6 +68,9 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
   currentWeekKey,
   onUpdateCell,
   onUpdateNote,
+  onToggleWeekComplete,
+  onToggleCellTaught,
+  completionDisplayMode = 'both',
   onOpenAiHelper,
   onOpenAIHelper,
   onClearFilters,
@@ -296,20 +303,24 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
                       const isCurrentWeek = currentWeekKey === weekKey;
                       const reportCycles = getReportCyclesForWeek(term.id, row.n);
                       const hasReports = reportCycles.length > 0;
+                      const isWeekCompleted = !!row.completed;
+                      const shouldHighlightRow = isWeekCompleted && (completionDisplayMode === 'both' || completionDisplayMode === 'highlight');
 
                       return (
                         <tr
                           key={weekKey}
                           id={`week-row-${weekKey}`}
                           className={`group transition-colors ${
-                            isCurrentWeek 
+                            shouldHighlightRow
+                              ? 'bg-emerald-50/30 hover:bg-emerald-50/50 border-l-4 border-l-emerald-500'
+                              : isCurrentWeek 
                               ? 'bg-indigo-50/50 hover:bg-indigo-50/80 ring-2 ring-indigo-500/20' 
                               : 'hover:bg-slate-50/60'
                           }`}
                         >
                           {/* Week Number, Dates & Indicators */}
-                          <td className="py-3 px-4 align-top font-mono-code border-r border-slate-100 bg-slate-50/40">
-                            <div className="flex flex-col gap-1">
+                          <td className={`py-3 px-4 align-top font-mono-code border-r border-slate-100 ${shouldHighlightRow ? 'bg-emerald-50/40' : 'bg-slate-50/40'}`}>
+                            <div className="flex flex-col gap-1.5">
                               <div className="flex items-center justify-between">
                                 <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
                                   Week {row.n}
@@ -322,6 +333,28 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
                               <span className="text-[11px] text-slate-500 font-medium leading-tight">
                                 {row.dates}
                               </span>
+
+                              {/* Week Completion Toggle Button / Badge */}
+                              {isEditable && onToggleWeekComplete ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onToggleWeekComplete(term.id, row.n)}
+                                  title={isWeekCompleted ? 'Week marked as complete. Click to undo/unmark.' : `Mark entire Week ${row.n} as complete`}
+                                  className={`mt-1 inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 rounded-lg border transition-all cursor-pointer ${
+                                    isWeekCompleted
+                                      ? 'bg-emerald-100 text-emerald-900 border-emerald-300 hover:bg-emerald-200 shadow-2xs'
+                                      : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50/50'
+                                  }`}
+                                >
+                                  <CheckCircle2 className={`w-3.5 h-3.5 ${isWeekCompleted ? 'text-emerald-600 fill-emerald-100' : 'text-slate-400'}`} />
+                                  <span>{isWeekCompleted ? 'Completed ✓' : 'Mark Complete'}</span>
+                                </button>
+                              ) : isWeekCompleted ? (
+                                <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300 w-fit">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  <span>Completed</span>
+                                </span>
+                              ) : null}
 
                               {row.flag && (
                                 <span className="inline-block mt-0.5 text-[10px] bg-amber-100 text-amber-900 font-bold px-1.5 py-0.5 rounded border border-amber-200">
@@ -352,12 +385,17 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
                             const cell = row.cells[y.id] || { text: '' };
                             const cellKey = `${term.id}-${row.n}-${y.id}`;
                             const isAssessed = !!cell.assess;
+                            const isCellCompleted = isWeekCompleted || !!cell.taught;
+                            const shouldCrossText = isCellCompleted && (completionDisplayMode === 'both' || completionDisplayMode === 'strike');
+                            const shouldHighlightCell = isCellCompleted && (completionDisplayMode === 'both' || completionDisplayMode === 'highlight');
 
                             return (
                               <td
                                 key={y.id}
                                 className={`py-3 px-4 align-top border-r border-slate-100 relative group/cell transition-colors ${
-                                  isAssessed
+                                  shouldHighlightCell
+                                    ? 'bg-emerald-50/25 hover:bg-emerald-50/40'
+                                    : isAssessed
                                     ? 'bg-rose-50/40 hover:bg-rose-50/60'
                                     : ''
                                 }`}
@@ -365,42 +403,83 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
                                 <div className="flex flex-col h-full justify-between gap-2">
                                   {/* Text content / editable textarea */}
                                   {isEditable ? (
-                                    <textarea
-                                      value={cell.text}
-                                      onChange={(e) => onUpdateCell(term.id, row.n, y.id, { text: e.target.value })}
-                                      rows={3}
-                                      className="w-full text-xs font-sans text-slate-900 bg-white/90 border border-slate-200 hover:border-slate-300 focus:border-indigo-500 rounded-lg p-2 resize overflow-auto focus:bg-white focus:ring-2 focus:ring-indigo-400/30 focus:outline-hidden leading-relaxed min-h-[68px] shadow-2xs"
-                                      placeholder="Add lesson content / topic..."
-                                      title="Drag right corner to adjust size"
-                                    />
+                                    <div className="relative">
+                                      <textarea
+                                        value={cell.text}
+                                        onChange={(e) => onUpdateCell(term.id, row.n, y.id, { text: e.target.value })}
+                                        rows={3}
+                                        className={`w-full text-xs font-sans border rounded-lg p-2 resize overflow-auto focus:bg-white focus:ring-2 focus:outline-hidden leading-relaxed min-h-[68px] shadow-2xs transition-colors ${
+                                          shouldCrossText
+                                            ? 'line-through decoration-emerald-600/70 text-slate-500 bg-emerald-50/30 border-emerald-200 focus:border-emerald-500 focus:ring-emerald-400/30'
+                                            : 'text-slate-900 bg-white/90 border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-indigo-400/30'
+                                        }`}
+                                        placeholder="Add lesson content / topic..."
+                                        title="Drag right corner to adjust size"
+                                      />
+                                      {isCellCompleted && (
+                                        <span className="absolute top-1.5 right-1.5 pointer-events-none text-[10px] font-bold text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-1.5 py-0.5 rounded flex items-center gap-1 shadow-2xs">
+                                          <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                                          <span>Done</span>
+                                        </span>
+                                      )}
+                                    </div>
                                   ) : (
-                                    <div className="text-xs font-sans text-slate-800 leading-relaxed whitespace-pre-wrap">
+                                    <div className={`text-xs font-sans leading-relaxed whitespace-pre-wrap ${
+                                      shouldCrossText
+                                        ? 'line-through decoration-emerald-600/70 text-slate-500 font-normal'
+                                        : 'text-slate-800'
+                                    }`}>
                                       {cell.text || <span className="text-slate-300 italic">No topic</span>}
+                                      {isCellCompleted && (
+                                        <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-300">
+                                          <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                                          <span>Completed</span>
+                                        </span>
+                                      )}
                                     </div>
                                   )}
 
                                   {/* Bottom Cell Controls */}
                                   <div className="flex items-center justify-between pt-1 border-t border-slate-100/60 text-[11px]">
-                                    {/* Assessment Flag Toggle */}
-                                    <button
-                                      onClick={() => {
-                                        if (isEditable) {
-                                          onUpdateCell(term.id, row.n, y.id, { assess: !cell.assess });
-                                        }
-                                      }}
-                                      disabled={!isEditable}
-                                      className={`flex items-center gap-1 font-bold px-1.5 py-0.5 rounded transition-all cursor-pointer ${
-                                        isAssessed
-                                          ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                                          : isEditable
-                                          ? 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
-                                          : 'hidden'
-                                      }`}
-                                      title={isAssessed ? 'Assessment week (Click to toggle)' : 'Mark as assessment week'}
-                                    >
-                                      <Star className={`w-3 h-3 ${isAssessed ? 'fill-rose-600 text-rose-600' : ''}`} />
-                                      <span>{isAssessed ? 'Assess' : ''}</span>
-                                    </button>
+                                    <div className="flex items-center gap-1.5">
+                                      {/* Assessment Flag Toggle */}
+                                      <button
+                                        onClick={() => {
+                                          if (isEditable) {
+                                            onUpdateCell(term.id, row.n, y.id, { assess: !cell.assess });
+                                          }
+                                        }}
+                                        disabled={!isEditable}
+                                        className={`flex items-center gap-1 font-bold px-1.5 py-0.5 rounded transition-all cursor-pointer ${
+                                          isAssessed
+                                            ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                            : isEditable
+                                            ? 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                                            : 'hidden'
+                                        }`}
+                                        title={isAssessed ? 'Assessment week (Click to toggle)' : 'Mark as assessment week'}
+                                      >
+                                        <Star className={`w-3 h-3 ${isAssessed ? 'fill-rose-600 text-rose-600' : ''}`} />
+                                        <span>{isAssessed ? 'Assess' : ''}</span>
+                                      </button>
+
+                                      {/* Individual Lesson Taught/Completed Toggle */}
+                                      {isEditable && onToggleCellTaught && (
+                                        <button
+                                          type="button"
+                                          onClick={() => onToggleCellTaught(term.id, row.n, y.id)}
+                                          className={`flex items-center gap-1 font-bold px-1.5 py-0.5 rounded transition-all cursor-pointer ${
+                                            cell.taught
+                                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                              : 'text-slate-400 hover:text-emerald-700 hover:bg-emerald-50'
+                                          }`}
+                                          title={cell.taught ? 'Lesson taught/completed (Click to toggle)' : 'Mark this lesson as taught/completed'}
+                                        >
+                                          <CheckCircle2 className={`w-3 h-3 ${cell.taught ? 'text-emerald-600' : ''}`} />
+                                          <span>{cell.taught ? 'Taught' : 'Teach'}</span>
+                                        </button>
+                                      )}
+                                    </div>
 
                                     {/* Quick Actions: AI & Copy */}
                                     <div className="flex items-center gap-1 opacity-0 group-hover/cell:opacity-100 transition-opacity">
