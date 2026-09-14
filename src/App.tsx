@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { TermData, YearConfig, CellData, ViewMode, UserRole, LockState, CurriculumState, YearReportDate, BreakRow, StudentVisibilitySettings, ActiveWeekSetting, PortalOverviewSettings } from './types';
+import { TermData, YearConfig, CellData, ViewMode, UserRole, LockState, CurriculumState, YearReportDate, BreakRow, StudentVisibilitySettings, ActiveWeekSetting, PortalOverviewSettings, CompletionDisplayMode } from './types';
 import { YEARS, INITIAL_PLAN } from './data/defaultPlan';
 import { DEFAULT_YEAR_REPORT_DATES } from './data/reportCycles';
 import { DEFAULT_OVERVIEW_SETTINGS, DEFAULT_ACTIVE_WEEK_SETTING, DEFAULT_STUDENT_VISIBILITY } from './data/defaultSettings';
@@ -132,6 +132,27 @@ export default function App() {
     } catch {}
     return DEFAULT_OVERVIEW_SETTINGS;
   });
+
+  // Completion Display Mode (both: cross + highlight, strike: strikethrough only, highlight: highlight only)
+  const [completionDisplayMode, setCompletionDisplayMode] = useState<CompletionDisplayMode>(() => {
+    try {
+      const saved = localStorage.getItem('curriculum_completion_mode');
+      if (saved === 'both' || saved === 'strike' || saved === 'highlight') {
+        return saved;
+      }
+    } catch {}
+    return 'both';
+  });
+
+  const handleToggleCompletionDisplayMode = () => {
+    setCompletionDisplayMode(prev => {
+      const next: CompletionDisplayMode = prev === 'both' ? 'strike' : prev === 'strike' ? 'highlight' : 'both';
+      try {
+        localStorage.setItem('curriculum_completion_mode', next);
+      } catch {}
+      return next;
+    });
+  };
 
   // Modal states
   const [isLockModalOpen, setIsLockModalOpen] = useState(false);
@@ -439,6 +460,64 @@ export default function App() {
             return {
               ...row,
               note: noteText
+            };
+          })
+        };
+      });
+
+      triggerSave(nextPlan);
+      return nextPlan;
+    });
+  };
+
+  // Toggle week completed status
+  const handleToggleWeekComplete = (termId: string, weekN: number) => {
+    if (isLocked && userRole !== 'teacher') return;
+
+    setPlan(prevPlan => {
+      const nextPlan = prevPlan.map(term => {
+        if (term.id !== termId) return term;
+        return {
+          ...term,
+          rows: term.rows.map(row => {
+            if (row.kind !== 'week' || row.n !== weekN) return row;
+            const newCompleted = !row.completed;
+            return {
+              ...row,
+              completed: newCompleted,
+              completedAt: newCompleted ? new Date().toISOString() : undefined
+            };
+          })
+        };
+      });
+
+      triggerSave(nextPlan);
+      return nextPlan;
+    });
+  };
+
+  // Toggle individual cohort cell taught / completed status
+  const handleToggleCellTaught = (termId: string, weekN: number, yearId: string) => {
+    if (isLocked && userRole !== 'teacher') return;
+
+    setPlan(prevPlan => {
+      const nextPlan = prevPlan.map(term => {
+        if (term.id !== termId) return term;
+        return {
+          ...term,
+          rows: term.rows.map(row => {
+            if (row.kind !== 'week' || row.n !== weekN) return row;
+            const currentCell = row.cells[yearId] || { text: '' };
+            const newTaught = !currentCell.taught;
+            return {
+              ...row,
+              cells: {
+                ...row.cells,
+                [yearId]: {
+                  ...currentCell,
+                  taught: newTaught
+                }
+              }
             };
           })
         };
@@ -805,6 +884,7 @@ export default function App() {
               onLogoutTeacher={handleTeacherLogout}
               visibilitySettings={studentVisibility}
               reportDates={reportDates}
+              onToggleWeekComplete={handleToggleWeekComplete}
               onEditBreak={handleOpenEditBreak}
               onDeleteBreak={handleDeleteBreak}
               onToggleBreakVisibility={handleToggleBreakVisibility}
@@ -861,6 +941,8 @@ export default function App() {
               onToggleAssessOnly={() => setAssessOnly(prev => !prev)}
               reportOnly={reportOnly}
               onToggleReportOnly={() => setReportOnly(prev => !prev)}
+              completionDisplayMode={completionDisplayMode}
+              onToggleCompletionDisplayMode={handleToggleCompletionDisplayMode}
               userRole={userRole}
               onToggleRole={() => setUserRole('student')}
               lockState={lockState}
@@ -888,6 +970,9 @@ export default function App() {
                   currentWeekKey={currentWeekKey}
                   onUpdateCell={handleUpdateCell}
                   onUpdateNote={handleUpdateNote}
+                  onToggleWeekComplete={handleToggleWeekComplete}
+                  onToggleCellTaught={handleToggleCellTaught}
+                  completionDisplayMode={completionDisplayMode}
                   onOpenAiHelper={(cell) => setAiHelperCell(cell)}
                   onEditBreak={handleOpenEditBreak}
                   onDeleteBreak={handleDeleteBreak}
@@ -909,6 +994,9 @@ export default function App() {
                   currentWeekKey={currentWeekKey}
                   onUpdateCell={handleUpdateCell}
                   onUpdateNote={handleUpdateNote}
+                  onToggleWeekComplete={handleToggleWeekComplete}
+                  onToggleCellTaught={handleToggleCellTaught}
+                  completionDisplayMode={completionDisplayMode}
                   onOpenAiHelper={(cell) => setAiHelperCell(cell)}
                   onEditBreak={handleOpenEditBreak}
                   onDeleteBreak={handleDeleteBreak}
