@@ -29,6 +29,7 @@ interface HeaderProps {
   isManualWeek?: boolean;
   overviewSettings?: PortalOverviewSettings;
   isTeacherAuthenticated?: boolean;
+  selectedYears?: string[];
   onJumpCurrentWeek: () => void;
   onOpenActiveWeekModal?: () => void;
   onOpenOverviewModal?: () => void;
@@ -48,6 +49,7 @@ export const Header: React.FC<HeaderProps> = ({
   isManualWeek = false,
   overviewSettings,
   isTeacherAuthenticated = false,
+  selectedYears = [],
   onJumpCurrentWeek,
   onOpenActiveWeekModal,
   onOpenOverviewModal,
@@ -59,8 +61,17 @@ export const Header: React.FC<HeaderProps> = ({
   const isLocked = !!lockState?.isLocked;
   const [copiedStudentLink, setCopiedStudentLink] = useState(false);
 
+  // If a single year group is selected, create link for that specific year group.
+  // Only create whole-school link if all years or none are selected.
+  const targetYear = selectedYears.length === 1 ? selectedYears[0] : (selectedYears.length > 0 && selectedYears.length < 7 ? selectedYears[0] : null);
+
   const handleCopyStudentLink = () => {
-    const studentUrl = `${window.location.origin}${window.location.pathname}?role=student`;
+    const params = new URLSearchParams();
+    params.set('role', 'student');
+    if (targetYear) {
+      params.set('year', targetYear);
+    }
+    const studentUrl = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
     navigator.clipboard.writeText(studentUrl);
     setCopiedStudentLink(true);
     setTimeout(() => setCopiedStudentLink(false), 2500);
