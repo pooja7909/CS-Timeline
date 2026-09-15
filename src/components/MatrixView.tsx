@@ -36,6 +36,7 @@ interface MatrixViewProps {
   currentWeekKey: string | null;
   onUpdateCell: (termId: string, weekN: number, yearId: string, updates: Partial<CellData>) => void;
   onUpdateNote: (termId: string, weekN: number, note: string) => void;
+  onUpdateFlag?: (termId: string, weekN: number, flag: string) => void;
   onToggleWeekComplete?: (termId: string, weekN: number) => void;
   onToggleCellTaught?: (termId: string, weekN: number, yearId: string) => void;
   completionDisplayMode?: CompletionDisplayMode;
@@ -77,10 +78,13 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
   onEditBreak,
   onDeleteBreak,
   onToggleBreakVisibility,
-  onAddBreak
+  onAddBreak,
+  onUpdateFlag
 }) => {
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
   const [copiedCellKey, setCopiedCellKey] = useState<string | null>(null);
+  const [editingFlagKey, setEditingFlagKey] = useState<string | null>(null);
+  const [flagInputVal, setFlagInputVal] = useState<string>('');
 
   const activeYears = years.filter(y => selectedYears.includes(y.id));
 
@@ -356,11 +360,91 @@ export const MatrixView: React.FC<MatrixViewProps> = ({
                                 </span>
                               ) : null}
 
-                              {row.flag && (
-                                <span className="inline-block mt-0.5 text-[10px] bg-amber-100 text-amber-900 font-bold px-1.5 py-0.5 rounded border border-amber-200">
-                                  {row.flag}
-                                </span>
-                              )}
+                              {/* Week Flag / Milestone Tag (e.g. Major Submissions, Ends Wed · 12 noon finish) */}
+                              {editingFlagKey === `${term.id}-${row.n}` ? (
+                                <div className="mt-1 p-1.5 bg-amber-50 border border-amber-300 rounded-lg flex flex-col gap-1 z-10">
+                                  <input
+                                    type="text"
+                                    value={flagInputVal}
+                                    onChange={(e) => setFlagInputVal(e.target.value)}
+                                    placeholder="e.g. Major Submissions"
+                                    className="w-full text-[11px] px-1.5 py-0.5 border border-amber-300 rounded bg-white font-mono-code focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        onUpdateFlag && onUpdateFlag(term.id, row.n, flagInputVal);
+                                        setEditingFlagKey(null);
+                                      } else if (e.key === 'Escape') {
+                                        setEditingFlagKey(null);
+                                      }
+                                    }}
+                                  />
+                                  <div className="flex items-center justify-between gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        onUpdateFlag && onUpdateFlag(term.id, row.n, flagInputVal);
+                                        setEditingFlagKey(null);
+                                      }}
+                                      className="text-[10px] bg-amber-600 text-white px-1.5 py-0.5 rounded font-bold hover:bg-amber-700 cursor-pointer"
+                                    >
+                                      Save
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        onUpdateFlag && onUpdateFlag(term.id, row.n, '');
+                                        setEditingFlagKey(null);
+                                      }}
+                                      className="text-[10px] text-rose-600 hover:text-rose-800 font-bold cursor-pointer"
+                                    >
+                                      Remove
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingFlagKey(null)}
+                                      className="text-[10px] text-slate-500 hover:text-slate-700 cursor-pointer"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : row.flag ? (
+                                <div className="group/flag mt-0.5 flex items-center gap-1">
+                                  <span 
+                                    className="inline-block text-[10px] bg-amber-100 text-amber-900 font-bold px-1.5 py-0.5 rounded border border-amber-200"
+                                    title={row.flag}
+                                  >
+                                    {row.flag}
+                                  </span>
+                                  {isEditable && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingFlagKey(`${term.id}-${row.n}`);
+                                        setFlagInputVal(row.flag || '');
+                                      }}
+                                      title="Edit this week milestone tag"
+                                      className="opacity-0 group-hover/flag:opacity-100 p-0.5 text-amber-700 hover:text-amber-900 hover:bg-amber-100 rounded transition-opacity cursor-pointer"
+                                    >
+                                      <Pencil className="w-2.5 h-2.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              ) : isEditable ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingFlagKey(`${term.id}-${row.n}`);
+                                    setFlagInputVal('');
+                                  }}
+                                  title="Add a week milestone or special event badge (e.g. Major Submissions, Exam Period)"
+                                  className="mt-0.5 text-[9px] text-slate-400 hover:text-amber-700 font-medium flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                                >
+                                  <Plus className="w-2.5 h-2.5" />
+                                  <span>Tag</span>
+                                </button>
+                              ) : null}
 
                               {/* Report Cycle Indicators */}
                               {hasReports && (
