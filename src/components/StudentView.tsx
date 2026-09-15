@@ -61,6 +61,7 @@ interface StudentViewProps {
   onDeleteBreak?: (termId: string, positionIdx: number) => void;
   onToggleBreakVisibility?: (termId: string, positionIdx: number, newVisibility: boolean) => void;
   onAddBreak?: (termId: string) => void;
+  onUpdateFlag?: (termId: string, weekN: number, flag: string) => void;
   onOpenVisibilitySettings?: () => void;
   onOpenOverviewModal?: () => void;
   onOpenActiveWeekModal?: () => void;
@@ -90,6 +91,7 @@ export const StudentView: React.FC<StudentViewProps> = ({
   onDeleteBreak,
   onToggleBreakVisibility,
   onAddBreak,
+  onUpdateFlag,
   onOpenVisibilitySettings,
   onOpenOverviewModal,
   onOpenActiveWeekModal,
@@ -99,6 +101,8 @@ export const StudentView: React.FC<StudentViewProps> = ({
   const [filterAssessmentsOnly, setFilterAssessmentsOnly] = useState(false);
   const [activeTermTab, setActiveTermTab] = useState<string>('all');
   const [activePortalTab, setActivePortalTab] = useState<'timeline' | 'reports' | 'calendar' | 'matrix' | 'roadmap'>('timeline');
+  const [editingFlagKey, setEditingFlagKey] = useState<string | null>(null);
+  const [flagInputVal, setFlagInputVal] = useState<string>('');
 
   // Filter years based on:
   // 1. If link is locked to a specific year group (?year=y7 in URL)
@@ -132,7 +136,7 @@ export const StudentView: React.FC<StudentViewProps> = ({
     term.rows.forEach(row => {
       if (row.kind === 'week') {
         const cell = row.cells[selectedYear.id];
-        if (cell && (cell.assess || cell.text.toLowerCase().includes('assessment') || cell.text.toLowerCase().includes('exam') || cell.text.toLowerCase().includes('test') || cell.text.toLowerCase().includes('mock') || cell.text.toLowerCase().includes('criterion'))) {
+        if (cell && cell.assess) {
           allAssessments.push({
             termName: term.name.split('·')[0].trim(),
             weekN: row.n,
@@ -255,10 +259,12 @@ export const StudentView: React.FC<StudentViewProps> = ({
                 <span className="text-[11px] font-mono-code text-indigo-200 block uppercase font-bold">
                   Current School Week
                 </span>
-                {isManualWeek ? (
-                  <span className="px-1.5 py-0.2 bg-amber-500/30 text-amber-200 border border-amber-400/30 rounded text-[9px] font-bold">Manual</span>
-                ) : (
-                  <span className="px-1.5 py-0.2 bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 rounded text-[9px] font-bold"></span>
+                {userRole === 'teacher' && (
+                  isManualWeek ? (
+                    <span className="px-1.5 py-0.2 bg-amber-500/30 text-amber-200 border border-amber-400/30 rounded text-[9px] font-bold">Manual</span>
+                  ) : (
+                    <span className="px-1.5 py-0.2 bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 rounded text-[9px] font-bold">Auto</span>
+                  )
                 )}
               </div>
               <div className="text-base font-bold text-white font-display flex items-center md:justify-end gap-1.5 mt-0.5">
@@ -386,11 +392,6 @@ export const StudentView: React.FC<StudentViewProps> = ({
             <label className="block text-xs font-mono-code font-bold uppercase tracking-wider text-indigo-200">
               {activeYearList.length === 1 ? 'Curriculum Year Level:' : 'Choose Your Year Level:'}
             </label>
-            {activeYearList.length === 1 && userRole !== 'teacher' && (
-              <span className="text-[11px] font-mono-code text-emerald-300 font-bold bg-emerald-950/40 border border-emerald-500/30 px-2 py-0.5 rounded-md">
-                 {selectedYear.label} Curriculum View
-              </span>
-            )}
             {userRole === 'teacher' && visibilitySettings && (
               <span className="text-[11px] font-mono-code text-indigo-300">
                 {activeYearList.length} of {years.length} Years Published
@@ -546,7 +547,9 @@ export const StudentView: React.FC<StudentViewProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
-             
+              <span className="text-xs font-mono-code text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl font-semibold border border-slate-200">
+                ★ {allAssessments.length} Assessments Mapped
+              </span>
               <span className="text-xs font-mono-code text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl font-semibold border border-slate-200">
                 38 Teaching Weeks
               </span>
@@ -810,7 +813,7 @@ export const StudentView: React.FC<StudentViewProps> = ({
                         // WEEK ROW
                         const isCurrentWeek = `${term.id}-${row.n}` === currentWeekKey;
                         const cell = row.cells[selectedYear.id] || { text: '', assess: false, taught: false };
-                        const hasAssess = cell.assess || cell.text.toLowerCase().includes('assessment') || cell.text.toLowerCase().includes('exam') || cell.text.toLowerCase().includes('test') || cell.text.toLowerCase().includes('mock') || cell.text.toLowerCase().includes('criterion');
+                        const hasAssess = !!cell.assess;
                         const isWeekCompleted = !!row.completed;
                         const isCellCompleted = isWeekCompleted || !!cell.taught;
                         const shouldCrossText = isCellCompleted && (completionDisplayMode === 'both' || completionDisplayMode === 'strike');
@@ -855,13 +858,90 @@ export const StudentView: React.FC<StudentViewProps> = ({
                               <div className="text-xs text-slate-500 font-mono-code mt-1 font-medium">
                                 {row.dates}
                               </div>
-                              {row.flag && (
-                                <div className="mt-1.5">
+                              {/* Week Flag / Milestone Tag (e.g. Major Submissions, Ends Wed · 12 noon finish) */}
+                              {editingFlagKey === `${term.id}-${row.n}` ? (
+                                <div className="mt-1.5 p-1.5 bg-amber-50 border border-amber-300 rounded-lg flex flex-col gap-1 w-full max-w-[220px]">
+                                  <input
+                                    type="text"
+                                    value={flagInputVal}
+                                    onChange={(e) => setFlagInputVal(e.target.value)}
+                                    placeholder="e.g. Major Submissions"
+                                    className="text-xs px-2 py-1 border border-amber-300 rounded bg-white font-mono-code focus:outline-none focus:ring-1 focus:ring-amber-500 w-full"
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        onUpdateFlag && onUpdateFlag(term.id, row.n, flagInputVal);
+                                        setEditingFlagKey(null);
+                                      } else if (e.key === 'Escape') {
+                                        setEditingFlagKey(null);
+                                      }
+                                    }}
+                                  />
+                                  <div className="flex items-center justify-between gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        onUpdateFlag && onUpdateFlag(term.id, row.n, flagInputVal);
+                                        setEditingFlagKey(null);
+                                      }}
+                                      className="text-[10px] bg-amber-600 text-white px-2 py-0.5 rounded font-bold hover:bg-amber-700 cursor-pointer"
+                                    >
+                                      Save
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        onUpdateFlag && onUpdateFlag(term.id, row.n, '');
+                                        setEditingFlagKey(null);
+                                      }}
+                                      className="text-[10px] text-rose-600 hover:text-rose-800 font-bold cursor-pointer"
+                                    >
+                                      Remove
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingFlagKey(null)}
+                                      className="text-[10px] text-slate-500 hover:text-slate-700 cursor-pointer"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : row.flag ? (
+                                <div className="mt-1.5 group/flag inline-flex items-center gap-1.5">
                                   <span className="inline-block text-[11px] font-bold font-mono-code text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-200">
                                     {row.flag}
                                   </span>
+                                  {userRole === 'teacher' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingFlagKey(`${term.id}-${row.n}`);
+                                        setFlagInputVal(row.flag || '');
+                                      }}
+                                      title="Edit this week milestone tag"
+                                      className="opacity-0 group-hover/flag:opacity-100 p-1 text-amber-700 hover:text-amber-900 hover:bg-amber-100 rounded transition-opacity cursor-pointer"
+                                    >
+                                      <Pencil className="w-3 h-3" />
+                                    </button>
+                                  )}
                                 </div>
-                              )}
+                              ) : userRole === 'teacher' ? (
+                                <div className="mt-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingFlagKey(`${term.id}-${row.n}`);
+                                      setFlagInputVal('');
+                                    }}
+                                    title="Add a week milestone or event badge"
+                                    className="text-[10px] text-slate-400 hover:text-amber-700 font-medium inline-flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                    <span>Add Tag</span>
+                                  </button>
+                                </div>
+                              ) : null}
                             </div>
 
                             {/* Learning Topic & Assessment Content */}
