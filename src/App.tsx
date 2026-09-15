@@ -72,9 +72,15 @@ export default function App() {
   const [selectedYears, setSelectedYears] = useState<string[]>(() => {
     try {
       const urlParams = new URLSearchParams(window.location.search);
-      const urlYear = urlParams.get('year');
-      if (urlYear && YEARS.some(y => y.id === urlYear)) {
-        return [urlYear];
+      const urlYear = urlParams.get('year') || urlParams.get('years');
+      if (urlYear && urlYear !== 'all') {
+        const parsed = urlYear
+          .split(',')
+          .map(s => s.trim().toLowerCase())
+          .filter(s => YEARS.some(y => y.id === s));
+        if (parsed.length > 0) {
+          return parsed;
+        }
       }
     } catch {}
     return YEARS.map(y => y.id);
@@ -218,10 +224,16 @@ export default function App() {
       const token = sessionStorage.getItem('bisb_teacher_token');
       const urlParams = new URLSearchParams(window.location.search);
       const requestedRole = urlParams.get('role');
-      const yearParam = urlParams.get('year');
+      const yearParam = urlParams.get('year') || urlParams.get('years');
 
-      if (yearParam && YEARS.some(y => y.id === yearParam)) {
-        setSelectedYears([yearParam]);
+      if (yearParam && yearParam !== 'all') {
+        const parsed = yearParam
+          .split(',')
+          .map(s => s.trim().toLowerCase())
+          .filter(s => YEARS.some(y => y.id === s));
+        if (parsed.length > 0) {
+          setSelectedYears(parsed);
+        }
       }
 
       // Case 1: Student link shared with students & parents (?role=student)
@@ -904,7 +916,17 @@ export default function App() {
               onOpenStaffLogin={() => setIsTeacherAuthOpen(true)}
               userRole={userRole}
               isTeacherAuthenticated={isTeacherAuthenticated}
-              lockedToYear={new URLSearchParams(window.location.search).get('year')}
+              lockedToYear={new URLSearchParams(window.location.search).get('year') || new URLSearchParams(window.location.search).get('years')}
+              lockedToYears={(() => {
+                try {
+                  const p = new URLSearchParams(window.location.search).get('year') || new URLSearchParams(window.location.search).get('years');
+                  if (p && p !== 'all') {
+                    const parsed = p.split(',').map(s => s.trim().toLowerCase()).filter(s => YEARS.some(y => y.id === s));
+                    return parsed.length > 0 ? parsed : null;
+                  }
+                } catch {}
+                return null;
+              })()}
               onReturnToTeacherPage={() => setUserRole('teacher')}
               onLogoutTeacher={handleTeacherLogout}
               visibilitySettings={studentVisibility}
@@ -1075,6 +1097,7 @@ export default function App() {
         onClose={() => setIsShareModalOpen(false)}
         isLocked={isLocked}
         selectedYears={selectedYears}
+        initialYears={selectedYears}
         initialYear={selectedYears.length === 1 ? selectedYears[0] : (selectedYears.length > 0 && selectedYears.length < YEARS.length ? selectedYears[0] : 'all')}
       />
 
