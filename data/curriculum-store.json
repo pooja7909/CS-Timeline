@@ -680,7 +680,7 @@
             },
             "y13": {
               "text": "IA Official Submission; Mock revision — Theme A Computer Fundamentals",
-              "assess": true,
+              "assess": false,
               "taught": false
             }
           }
