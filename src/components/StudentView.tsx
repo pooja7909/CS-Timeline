@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { TermData, YearConfig, BreakRow, StudentVisibilitySettings, YearReportDate, UserRole, PortalOverviewSettings } from '../types';
 import { 
   GraduationCap, 
@@ -51,6 +51,7 @@ interface StudentViewProps {
   userRole?: UserRole;
   isTeacherAuthenticated?: boolean;
   lockedToYear?: string | null;
+  lockedToYears?: string[] | null;
   onReturnToTeacherPage?: () => void;
   onLogoutTeacher?: () => void;
   visibilitySettings?: StudentVisibilitySettings;
@@ -81,6 +82,7 @@ export const StudentView: React.FC<StudentViewProps> = ({
   userRole = 'student',
   isTeacherAuthenticated = false,
   lockedToYear = null,
+  lockedToYears = null,
   onReturnToTeacherPage,
   onLogoutTeacher,
   visibilitySettings,
@@ -105,22 +107,46 @@ export const StudentView: React.FC<StudentViewProps> = ({
   const [flagInputVal, setFlagInputVal] = useState<string>('');
 
   // Filter years based on:
-  // 1. If link is locked to a specific year group (?year=y7 in URL)
+  // 1. If link is locked to specific year group(s) (e.g. ?year=y10,y11 or lockedToYears prop)
   // 2. Teacher's visibility settings (if in student role)
   const allowedYears = useMemo(() => {
-    if (userRole !== 'teacher' && lockedToYear) {
-      const match = years.filter(y => y.id === lockedToYear);
-      if (match.length > 0) return match;
+    if (userRole !== 'teacher') {
+      let targetYears: string[] | null = null;
+      if (lockedToYears && lockedToYears.length > 0) {
+        targetYears = lockedToYears;
+      } else if (lockedToYear && lockedToYear !== 'all') {
+        targetYears = lockedToYear.split(',').map(s => s.trim().toLowerCase());
+      } else {
+        try {
+          const urlParams = new URLSearchParams(window.location.search);
+          const p = urlParams.get('year') || urlParams.get('years');
+          if (p && p !== 'all') {
+            targetYears = p.split(',').map(s => s.trim().toLowerCase());
+          }
+        } catch {}
+      }
+
+      if (targetYears && targetYears.length > 0) {
+        const matches = years.filter(y => targetYears!.includes(y.id));
+        if (matches.length > 0) return matches;
+      }
     }
     if (userRole === 'teacher' || !visibilitySettings?.visibleYears) {
       return years;
     }
     return years.filter(y => visibilitySettings.visibleYears.includes(y.id));
-  }, [years, userRole, lockedToYear, visibilitySettings?.visibleYears]);
+  }, [years, userRole, lockedToYear, lockedToYears, visibilitySettings?.visibleYears]);
 
   // Ensure selected year is in allowed list
   const activeYearList = allowedYears.length > 0 ? allowedYears : years;
   const selectedYear = activeYearList.find(y => y.id === selectedYearId) || activeYearList[0] || years[0];
+
+  // If current selected year is not in allowed years, sync to the first allowed year
+  useEffect(() => {
+    if (activeYearList.length > 0 && !activeYearList.some(y => y.id === selectedYearId)) {
+      onSelectYear(activeYearList[0].id);
+    }
+  }, [activeYearList, selectedYearId, onSelectYear]);
 
   // Collect all assessments for quick summary card
   const allAssessments: {
@@ -388,10 +414,17 @@ export const StudentView: React.FC<StudentViewProps> = ({
 
         {/* Year Group Selection Pills */}
         <div className="mt-6 pt-5 border-t border-white/10">
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <label className="block text-xs font-mono-code font-bold uppercase tracking-wider text-indigo-200">
-              {activeYearList.length === 1 ? 'Curriculum Year Level:' : 'Choose Your Year Level:'}
-            </label>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <label className="block text-xs font-mono-code font-bold uppercase tracking-wider text-indigo-200">
+                {activeYearList.length === 1 ? 'Curriculum Year Level:' : 'Choose Your Year Level:'}
+              </label>
+              {activeYearList.length > 1 && activeYearList.length < years.length && (
+                <span className="text-[11px] font-mono-code font-bold bg-white/20 text-white px-2 py-0.5 rounded-full border border-white/20">
+                  Shared Classes: {activeYearList.map(y => y.short).join(' & ')}
+                </span>
+              )}
+            </div>
             {userRole === 'teacher' && visibilitySettings && (
               <span className="text-[11px] font-mono-code text-indigo-300">
                 {activeYearList.length} of {years.length} Years Published
@@ -496,7 +529,7 @@ export const StudentView: React.FC<StudentViewProps> = ({
           <MatrixView
             plan={plan}
             years={years}
-            selectedYears={[selectedYear.id]}
+            selectedYears={activeYearList.map(y => y.id)}
             searchQuery=""
             assessOnly={false}
             reportOnly={false}
@@ -511,6 +544,7 @@ export const StudentView: React.FC<StudentViewProps> = ({
             onDeleteBreak={onDeleteBreak}
             onToggleBreakVisibility={onToggleBreakVisibility}
             onAddBreak={onAddBreak}
+            onUpdateFlag={onUpdateFlag}
           />
         </div>
       )}
