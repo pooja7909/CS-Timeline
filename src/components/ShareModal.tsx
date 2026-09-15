@@ -135,7 +135,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-xl w-full p-6 animate-in fade-in zoom-in-95 duration-150 text-slate-900 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-2xl w-full p-6 animate-in fade-in zoom-in-95 duration-150 text-slate-900 max-h-[90vh] overflow-y-auto">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="p-3 rounded-xl bg-blue-50 text-blue-700 border border-blue-100">
@@ -253,34 +253,41 @@ export const ShareModal: React.FC<ShareModalProps> = ({
           </div>
 
           {/* Interactive Class / Year Group Pills (Click to toggle) */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+          <div className="flex flex-wrap items-center gap-2 pt-1">
             {YEARS.map((y) => {
               const isChecked = selectedYearIds.includes(y.id);
               return (
                 <div
                   key={y.id}
-                  onClick={() => toggleYear(y.id)}
-                  className={`group relative flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-mono-code font-bold border transition-all cursor-pointer select-none ${
+                  className={`group inline-flex items-center rounded-xl text-xs font-mono-code font-bold border transition-all select-none whitespace-nowrap overflow-hidden shadow-2xs ${
                     isChecked
-                      ? 'bg-indigo-600 border-indigo-700 text-white shadow-xs'
-                      : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-100/70'
+                      ? 'bg-indigo-600 border-indigo-700 text-white ring-2 ring-indigo-200'
+                      : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                   }`}
                 >
-                  <div className="flex items-center gap-1.5 min-w-0">
+                  {/* Main Toggle Button */}
+                  <button
+                    type="button"
+                    onClick={() => toggleYear(y.id)}
+                    className="flex items-center gap-2 px-3.5 py-2 cursor-pointer"
+                    title={isChecked ? `Unselect ${y.label}` : `Select ${y.label}`}
+                  >
                     {isChecked ? (
-                      <CheckSquare className="w-3.5 h-3.5 flex-shrink-0 text-white" />
+                      <CheckSquare className="w-4 h-4 flex-shrink-0 text-white" />
                     ) : (
-                      <Square className="w-3.5 h-3.5 flex-shrink-0 text-slate-400 group-hover:text-slate-600" />
+                      <Square className="w-4 h-4 flex-shrink-0 text-slate-400 group-hover:text-slate-600" />
                     )}
-                    <span className="truncate">{y.label}</span>
-                  </div>
+                    <span className="whitespace-nowrap font-bold text-xs">{y.label}</span>
+                  </button>
+
+                  {/* "Only" button to quickly isolate this year group */}
                   <button
                     type="button"
                     onClick={(e) => handleSelectOnly(y.id, e)}
-                    className={`text-[9px] px-1 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity font-semibold ${
+                    className={`px-2 py-2 text-[10px] font-bold border-l cursor-pointer transition-colors ${
                       isChecked
-                        ? 'bg-indigo-700 text-indigo-100 hover:bg-indigo-800'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        ? 'border-indigo-500/50 text-indigo-100 hover:bg-indigo-700 hover:text-white'
+                        : 'border-slate-200 text-slate-400 hover:text-slate-800 hover:bg-slate-100'
                     }`}
                     title={`Select only ${y.label}`}
                   >
