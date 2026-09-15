@@ -29,6 +29,7 @@ interface TimelineViewProps {
   currentWeekKey: string | null;
   onUpdateCell: (termId: string, weekN: number, yearId: string, updates: Partial<CellData>) => void;
   onUpdateNote?: (termId: string, weekN: number, note: string) => void;
+  onUpdateFlag?: (termId: string, weekN: number, flag: string) => void;
   onToggleWeekComplete?: (termId: string, weekN: number) => void;
   onToggleCellTaught?: (termId: string, weekN: number, yearId: string) => void;
   completionDisplayMode?: CompletionDisplayMode;
@@ -67,9 +68,12 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
   onEditBreak,
   onDeleteBreak,
   onToggleBreakVisibility,
-  onAddBreak
+  onAddBreak,
+  onUpdateFlag
 }) => {
   const [activeYearId, setActiveYearId] = useState<string>(selectedYears[0] || 'y7');
+  const [editingFlagKey, setEditingFlagKey] = useState<string | null>(null);
+  const [flagInputVal, setFlagInputVal] = useState<string>('');
 
   const currentYear = years.find(y => y.id === activeYearId) || years[0];
   const timelineLocked = isLocked !== undefined ? isLocked : !!lockState?.isLocked;
@@ -315,11 +319,86 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
                           <span className="text-xs font-mono-code text-slate-500">
                             {row.dates}
                           </span>
-                          {row.flag && (
-                            <span className="text-[10px] bg-amber-100 text-amber-900 font-bold px-2 py-0.5 rounded border border-amber-200">
-                              {row.flag}
-                            </span>
-                          )}
+                          {/* Week Flag / Milestone Tag (e.g. Major Submissions, Ends Wed · 12 noon finish) */}
+                          {editingFlagKey === `${term.id}-${row.n}` ? (
+                            <div className="flex items-center gap-1.5 p-1 bg-amber-50 border border-amber-300 rounded-lg">
+                              <input
+                                type="text"
+                                value={flagInputVal}
+                                onChange={(e) => setFlagInputVal(e.target.value)}
+                                placeholder="e.g. Major Submissions"
+                                className="text-xs px-2 py-0.5 border border-amber-300 rounded bg-white font-mono-code focus:outline-none focus:ring-1 focus:ring-amber-500 w-36 sm:w-48"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    onUpdateFlag && onUpdateFlag(term.id, row.n, flagInputVal);
+                                    setEditingFlagKey(null);
+                                  } else if (e.key === 'Escape') {
+                                    setEditingFlagKey(null);
+                                  }
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onUpdateFlag && onUpdateFlag(term.id, row.n, flagInputVal);
+                                  setEditingFlagKey(null);
+                                }}
+                                className="text-[10px] bg-amber-600 text-white px-1.5 py-0.5 rounded font-bold hover:bg-amber-700 cursor-pointer"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onUpdateFlag && onUpdateFlag(term.id, row.n, '');
+                                  setEditingFlagKey(null);
+                                }}
+                                className="text-[10px] text-rose-600 hover:text-rose-800 font-bold cursor-pointer"
+                              >
+                                Remove
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingFlagKey(null)}
+                                className="text-[10px] text-slate-500 hover:text-slate-700 cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : row.flag ? (
+                            <div className="group/flag inline-flex items-center gap-1">
+                              <span className="text-[10px] bg-amber-100 text-amber-900 font-bold px-2 py-0.5 rounded border border-amber-200">
+                                {row.flag}
+                              </span>
+                              {isEditable && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingFlagKey(`${term.id}-${row.n}`);
+                                    setFlagInputVal(row.flag || '');
+                                  }}
+                                  title="Edit this week milestone tag"
+                                  className="opacity-0 group-hover/flag:opacity-100 p-0.5 text-amber-700 hover:text-amber-900 hover:bg-amber-100 rounded transition-opacity cursor-pointer"
+                                >
+                                  <Pencil className="w-2.5 h-2.5" />
+                                </button>
+                              )}
+                            </div>
+                          ) : isEditable ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingFlagKey(`${term.id}-${row.n}`);
+                                setFlagInputVal('');
+                              }}
+                              title="Add a week milestone or event badge"
+                              className="text-[10px] text-slate-400 hover:text-amber-700 font-medium inline-flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                            >
+                              <Plus className="w-2.5 h-2.5" />
+                              <span>Tag</span>
+                            </button>
+                          ) : null}
                         </div>
 
                         <div className="flex items-center gap-2">
