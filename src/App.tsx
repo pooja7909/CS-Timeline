@@ -470,6 +470,30 @@ export default function App() {
     });
   };
 
+  // Update a week flag/milestone badge (e.g. "Major Submissions", "Ends Wed · 12 noon finish")
+  const handleUpdateFlag = (termId: string, weekN: number, flagText: string) => {
+    if (isLocked && userRole !== 'teacher') return;
+
+    setPlan(prevPlan => {
+      const nextPlan = prevPlan.map(term => {
+        if (term.id !== termId) return term;
+        return {
+          ...term,
+          rows: term.rows.map(row => {
+            if (row.kind !== 'week' || row.n !== weekN) return row;
+            return {
+              ...row,
+              flag: flagText.trim() ? flagText.trim() : undefined
+            };
+          })
+        };
+      });
+
+      triggerSave(nextPlan);
+      return nextPlan;
+    });
+  };
+
   // Toggle week completed status
   const handleToggleWeekComplete = (termId: string, weekN: number) => {
     if (isLocked && userRole !== 'teacher') return;
@@ -891,6 +915,7 @@ export default function App() {
               onDeleteBreak={handleDeleteBreak}
               onToggleBreakVisibility={handleToggleBreakVisibility}
               onAddBreak={handleOpenAddBreak}
+              onUpdateFlag={handleUpdateFlag}
               onOpenVisibilitySettings={() => setIsVisibilityModalOpen(true)}
               onOpenActiveWeekModal={() => setIsActiveWeekModalOpen(true)}
               onOpenOverviewModal={() => setIsOverviewModalOpen(true)}
@@ -981,6 +1006,7 @@ export default function App() {
                   onDeleteBreak={handleDeleteBreak}
                   onToggleBreakVisibility={handleToggleBreakVisibility}
                   onAddBreak={handleOpenAddBreak}
+                  onUpdateFlag={handleUpdateFlag}
                 />
               )}
 
@@ -997,6 +1023,7 @@ export default function App() {
                   currentWeekKey={currentWeekKey}
                   onUpdateCell={handleUpdateCell}
                   onUpdateNote={handleUpdateNote}
+                  onUpdateFlag={handleUpdateFlag}
                   onToggleWeekComplete={handleToggleWeekComplete}
                   onToggleCellTaught={handleToggleCellTaught}
                   completionDisplayMode={completionDisplayMode}
