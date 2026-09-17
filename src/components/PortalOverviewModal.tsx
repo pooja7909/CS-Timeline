@@ -8,7 +8,8 @@ import {
   X, 
   RotateCcw,
   Heading,
-  Calendar
+  Calendar,
+  Tag
 } from 'lucide-react';
 
 interface PortalOverviewModalProps {
@@ -27,11 +28,13 @@ export const PortalOverviewModal: React.FC<PortalOverviewModalProps> = ({
   const [title, setTitle] = useState(settings.portalTitle);
   const [description, setDescription] = useState(settings.portalDescription);
   const [academicYear, setAcademicYear] = useState(settings.academicYearLabel);
+  const [defaultBannerLabel, setDefaultBannerLabel] = useState(settings.defaultBannerLabel || '');
 
   useEffect(() => {
     setTitle(settings.portalTitle);
     setDescription(settings.portalDescription);
     setAcademicYear(settings.academicYearLabel);
+    setDefaultBannerLabel(settings.defaultBannerLabel || '');
   }, [settings, isOpen]);
 
   if (!isOpen) return null;
@@ -41,7 +44,8 @@ export const PortalOverviewModal: React.FC<PortalOverviewModalProps> = ({
     onSave({
       portalTitle: title.trim() || DEFAULT_OVERVIEW_SETTINGS.portalTitle,
       portalDescription: description.trim() || DEFAULT_OVERVIEW_SETTINGS.portalDescription,
-      academicYearLabel: academicYear.trim() || DEFAULT_OVERVIEW_SETTINGS.academicYearLabel
+      academicYearLabel: academicYear.trim() || DEFAULT_OVERVIEW_SETTINGS.academicYearLabel,
+      defaultBannerLabel: defaultBannerLabel.trim()
     });
     onClose();
   };
@@ -50,6 +54,7 @@ export const PortalOverviewModal: React.FC<PortalOverviewModalProps> = ({
     setTitle(DEFAULT_OVERVIEW_SETTINGS.portalTitle);
     setDescription(DEFAULT_OVERVIEW_SETTINGS.portalDescription);
     setAcademicYear(DEFAULT_OVERVIEW_SETTINGS.academicYearLabel);
+    setDefaultBannerLabel('');
   };
 
   return (
@@ -113,6 +118,24 @@ export const PortalOverviewModal: React.FC<PortalOverviewModalProps> = ({
             />
           </div>
 
+          {/* Default Shared Cohort Banner Label */}
+          <div>
+            <label className="block text-xs font-mono-code font-bold uppercase tracking-wider text-slate-700 mb-1.5 flex items-center gap-1.5">
+              <Tag className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Default Shared Cohort Banner Label (Optional)</span>
+            </label>
+            <input
+              type="text"
+              value={defaultBannerLabel}
+              onChange={(e) => setDefaultBannerLabel(e.target.value)}
+              placeholder="e.g. IGCSE (replaces 'Shared Classes' when multiple groups are shared)"
+              className="w-full px-3.5 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-600 text-sm font-sans"
+            />
+            <span className="text-[11px] text-slate-500 mt-1 block">
+              Default badge displayed on the banner (e.g. <strong>IGCSE</strong>). Can also be customized per-link when generating share links.
+            </span>
+          </div>
+
           {/* Overview Description */}
           <div>
             <label className="block text-xs font-mono-code font-bold uppercase tracking-wider text-slate-700 mb-1.5 flex items-center gap-1.5">
@@ -136,8 +159,15 @@ export const PortalOverviewModal: React.FC<PortalOverviewModalProps> = ({
             <span className="text-[10px] font-mono-code text-indigo-300 uppercase tracking-wider font-bold">
               Live Preview
             </span>
-            <div className="text-xs font-mono-code text-emerald-400 font-bold">
-              {academicYear || DEFAULT_OVERVIEW_SETTINGS.academicYearLabel}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-mono-code text-emerald-400 font-bold">
+                {academicYear || DEFAULT_OVERVIEW_SETTINGS.academicYearLabel}
+              </span>
+              {defaultBannerLabel.trim() && (
+                <span className="text-[10px] font-mono-code text-indigo-200 bg-indigo-500/30 px-2 py-0.5 rounded-full border border-indigo-400/30 font-bold uppercase tracking-wider">
+                  {defaultBannerLabel.trim()}
+                </span>
+              )}
             </div>
             <div className="text-base font-bold font-display">
               {title || DEFAULT_OVERVIEW_SETTINGS.portalTitle}
