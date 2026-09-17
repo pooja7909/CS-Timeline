@@ -47,6 +47,9 @@ interface StudentViewProps {
   currentWeekText: string;
   isManualWeek?: boolean;
   overviewSettings?: PortalOverviewSettings;
+  // Banner customizations
+  customBannerLabel?: string | null;
+  customBannerTitle?: string | null;
   // Dynamic teacher controls & visibility settings
   userRole?: UserRole;
   isTeacherAuthenticated?: boolean;
@@ -79,6 +82,8 @@ export const StudentView: React.FC<StudentViewProps> = ({
   currentWeekText,
   isManualWeek = false,
   overviewSettings,
+  customBannerLabel,
+  customBannerTitle,
   userRole = 'student',
   isTeacherAuthenticated = false,
   lockedToYear = null,
@@ -105,6 +110,35 @@ export const StudentView: React.FC<StudentViewProps> = ({
   const [activePortalTab, setActivePortalTab] = useState<'timeline' | 'reports' | 'calendar' | 'matrix' | 'roadmap'>('timeline');
   const [editingFlagKey, setEditingFlagKey] = useState<string | null>(null);
   const [flagInputVal, setFlagInputVal] = useState<string>('');
+
+  // Teacher-defined banner badge (e.g. "IGCSE" instead of "Shared Classes")
+  const effectiveBannerBadge = useMemo(() => {
+    if (customBannerLabel !== undefined && customBannerLabel !== null && customBannerLabel !== '') {
+      return customBannerLabel;
+    }
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const b = urlParams.get('banner') || urlParams.get('badge');
+      if (b !== null && b !== '') return b;
+    } catch {}
+    if (overviewSettings?.defaultBannerLabel) {
+      return overviewSettings.defaultBannerLabel;
+    }
+    return null;
+  }, [customBannerLabel, overviewSettings?.defaultBannerLabel]);
+
+  // Teacher-defined banner title (if overridden in link or settings)
+  const effectiveBannerTitle = useMemo(() => {
+    if (customBannerTitle && customBannerTitle.trim() !== '') {
+      return customBannerTitle.trim();
+    }
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const t = urlParams.get('title') || urlParams.get('bannerTitle');
+      if (t && t.trim() !== '') return t.trim();
+    } catch {}
+    return overviewSettings?.portalTitle || 'Computing Syllabus & Curriculum Timeline';
+  }, [customBannerTitle, overviewSettings?.portalTitle]);
 
   // Filter years based on:
   // 1. If link is locked to specific year group(s) (e.g. ?year=y10,y11 or lockedToYears prop)
@@ -242,6 +276,14 @@ export const StudentView: React.FC<StudentViewProps> = ({
                 <span>{overviewSettings?.academicYearLabel || 'Academic Year 2026–2027'}</span>
               </div>
 
+              {/* Teacher-defined banner badge (e.g. IGCSE) */}
+              {effectiveBannerBadge && effectiveBannerBadge !== 'hide' && effectiveBannerBadge !== 'none' && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/40 text-xs font-mono-code font-bold uppercase tracking-wider shadow-2xs">
+                  <Tag className="w-3.5 h-3.5 text-indigo-300" />
+                  <span>{effectiveBannerBadge}</span>
+                </div>
+              )}
+
               {userRole === 'teacher' ? (
                 <div className="flex items-center gap-1.5">
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-mono-code font-bold">
@@ -266,7 +308,7 @@ export const StudentView: React.FC<StudentViewProps> = ({
             </div>
 
             <h1 className="text-2xl sm:text-4xl font-display font-black tracking-tight text-white">
-              {overviewSettings?.portalTitle || 'Computing Syllabus & Curriculum Timeline'}
+              {effectiveBannerTitle}
             </h1>
             <p className="text-sm sm:text-base text-slate-300 mt-2 max-w-2xl font-sans leading-relaxed">
               {overviewSettings?.portalDescription || 'Overview of all 38 teaching weeks, unit timelines, and assessment milestones for the 2026–2027 academic year.'}
@@ -419,10 +461,25 @@ export const StudentView: React.FC<StudentViewProps> = ({
               <label className="block text-xs font-mono-code font-bold uppercase tracking-wider text-indigo-200">
                 {activeYearList.length === 1 ? 'Curriculum Year Level:' : 'Choose Your Year Level:'}
               </label>
-              {activeYearList.length > 1 && activeYearList.length < years.length && (
-                <span className="text-[11px] font-mono-code font-bold bg-white/20 text-white px-2 py-0.5 rounded-full border border-white/20">
-                  Shared Classes: {activeYearList.map(y => y.short).join(' & ')}
+              {/* Teacher-defined banner text instead of "Shared Classes" */}
+              {effectiveBannerBadge && effectiveBannerBadge !== 'hide' && effectiveBannerBadge !== 'none' ? (
+                <span className="text-[11px] font-mono-code font-bold bg-indigo-500/30 text-white px-2.5 py-0.5 rounded-full border border-indigo-400/40 flex items-center gap-1.5 shadow-2xs">
+                  <Tag className="w-3 h-3 text-indigo-300" />
+                  <span>{effectiveBannerBadge}</span>
+                  {activeYearList.length > 1 && (
+                    <span className="text-indigo-200 font-normal">
+                      ({activeYearList.map(y => y.short).join(' & ')})
+                    </span>
+                  )}
                 </span>
+              ) : effectiveBannerBadge === 'hide' || effectiveBannerBadge === 'none' ? null : (
+                activeYearList.length > 1 && activeYearList.length < years.length && (
+                  <span className="text-[11px] font-mono-code font-bold bg-white/20 text-white px-2 py-0.5 rounded-full border border-white/20">
+                    {overviewSettings?.defaultBannerLabel 
+                      ? `${overviewSettings.defaultBannerLabel}: ${activeYearList.map(y => y.short).join(' & ')}`
+                      : `Shared Classes: ${activeYearList.map(y => y.short).join(' & ')}`}
+                  </span>
+                )
               )}
             </div>
             {userRole === 'teacher' && visibilitySettings && (
