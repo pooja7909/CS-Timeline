@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Copy, Check, Share2, ExternalLink, GraduationCap, Users, Shield, X, CheckSquare, Square, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Copy, Check, Share2, ExternalLink, GraduationCap, Users, Shield, X, CheckSquare, Square, RefreshCw, Tag, Sparkles, Eye, Sliders, Type } from 'lucide-react';
 import { YEARS } from '../data/defaultPlan';
+import { PortalOverviewSettings } from '../types';
 
 interface ShareModalProps {
   isOpen: boolean;
@@ -9,6 +10,7 @@ interface ShareModalProps {
   selectedYears?: string[];
   initialYear?: string;
   initialYears?: string[];
+  overviewSettings?: PortalOverviewSettings;
 }
 
 export const ShareModal: React.FC<ShareModalProps> = ({
@@ -17,7 +19,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   isLocked,
   selectedYears: activeSelectedYears,
   initialYear,
-  initialYears
+  initialYears,
+  overviewSettings
 }) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
@@ -43,13 +46,27 @@ export const ShareModal: React.FC<ShareModalProps> = ({
 
   const [selectedYearIds, setSelectedYearIds] = useState<string[]>(computeInitialYears);
 
+  // Teacher custom banner controls
+  const [bannerBadge, setBannerBadge] = useState<string>('');
+  const [customTitle, setCustomTitle] = useState<string>('');
+  const [hideBadge, setHideBadge] = useState<boolean>(false);
+
   useEffect(() => {
     if (isOpen) {
-      setSelectedYearIds(computeInitialYears());
+      const initial = computeInitialYears();
+      setSelectedYearIds(initial);
+      // Auto-suggest IGCSE if KS4 (y10, y11) is selected
+      if (initial.length === 2 && initial.includes('y10') && initial.includes('y11')) {
+        setBannerBadge('IGCSE');
+      } else if (overviewSettings?.defaultBannerLabel) {
+        setBannerBadge(overviewSettings.defaultBannerLabel);
+      } else {
+        setBannerBadge('');
+      }
+      setHideBadge(false);
+      setCustomTitle('');
     }
-  }, [isOpen, initialYear, initialYears, activeSelectedYears]);
-
-  if (!isOpen) return null;
+  }, [isOpen, initialYear, initialYears, activeSelectedYears, overviewSettings?.defaultBannerLabel]);
 
   const baseUrl = window.location.origin + window.location.pathname;
 
@@ -75,24 +92,84 @@ export const ShareModal: React.FC<ShareModalProps> = ({
 
   const handleSelectKS3 = () => {
     setSelectedYearIds(['y7', 'y8', 'y9']);
+    if (!bannerBadge || bannerBadge === 'IGCSE' || bannerBadge === 'A-Level') {
+      setBannerBadge('Key Stage 3');
+      setHideBadge(false);
+    }
   };
 
   const handleSelectKS4 = () => {
     setSelectedYearIds(['y10', 'y11']);
+    setBannerBadge('IGCSE');
+    setHideBadge(false);
   };
 
   const handleSelectKS5 = () => {
     setSelectedYearIds(['y12', 'y13']);
+    if (!bannerBadge || bannerBadge === 'IGCSE' || bannerBadge === 'Key Stage 3') {
+      setBannerBadge('A-Level');
+      setHideBadge(false);
+    }
   };
 
   const handleSelectOnly = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setSelectedYearIds([id]);
+    if (id === 'y10' || id === 'y11') {
+      setBannerBadge('IGCSE');
+    } else {
+      const yr = YEARS.find(y => y.id === id);
+      if (yr) setBannerBadge(yr.label);
+    }
+    setHideBadge(false);
   };
 
   // Derive sorted selected groups
   const sortedSelected = YEARS.filter(y => selectedYearIds.includes(y.id));
   const isAllYears = sortedSelected.length === YEARS.length || sortedSelected.length === 0;
+
+  // Determine smart suggested banner chips based on current year selection
+  const suggestedPills = useMemo(() => {
+    const isKS4 = sortedSelected.some(y => y.id === 'y10' || y.id === 'y11');
+    const isKS3 = sortedSelected.some(y => y.id === 'y7' || y.id === 'y8' || y.id === 'y9');
+    const isKS5 = sortedSelected.some(y => y.id === 'y12' || y.id === 'y13');
+
+    const pills: { label: string; value: string; isHighlighted?: boolean }[] = [];
+
+    if (isKS4) {
+      pills.push({ label: '✨ IGCSE', value: 'IGCSE', isHighlighted: true });
+      pills.push({ label: 'Key Stage 4', value: 'Key Stage 4' });
+      pills.push({ label: 'GCSE', value: 'GCSE' });
+    }
+    if (isKS3 && !isKS4 && !isKS5) {
+      pills.push({ label: '✨ Key Stage 3', value: 'Key Stage 3', isHighlighted: true });
+      pills.push({ label: 'KS3 Computing', value: 'KS3 Computing' });
+      pills.push({ label: 'Lower Secondary', value: 'Lower Secondary' });
+    }
+    if (isKS5 && !isKS4 && !isKS3) {
+      pills.push({ label: '✨ A-Level', value: 'A-Level', isHighlighted: true });
+      pills.push({ label: 'Sixth Form', value: 'Sixth Form' });
+      pills.push({ label: 'Key Stage 5', value: 'Key Stage 5' });
+    }
+    if (sortedSelected.length === 1) {
+      pills.push({ label: `${sortedSelected[0].label} Only`, value: `${sortedSelected[0].label}` });
+    }
+    if (sortedSelected.length > 1 && sortedSelected.length < YEARS.length) {
+      pills.push({ label: `${sortedSelected.map(y => y.short).join(' & ')}`, value: sortedSelected.map(y => y.short).join(' & ') });
+    }
+    return pills;
+  }, [sortedSelected]);
+
+  // Compute what banner badge will show on the preview
+  const effectivePreviewBadge = hideBadge 
+    ? null 
+    : bannerBadge.trim() 
+    ? bannerBadge.trim() 
+    : (sortedSelected.length > 1 && sortedSelected.length < YEARS.length 
+        ? (overviewSettings?.defaultBannerLabel || `Shared Classes: ${sortedSelected.map(y => y.short).join(' & ')}`)
+        : null);
+
+  const effectivePreviewTitle = customTitle.trim() || overviewSettings?.portalTitle || 'Computing Syllabus & Curriculum Timeline';
 
   // Generate URL
   const getShareUrl = (role: 'student' | 'teacher') => {
@@ -100,6 +177,14 @@ export const ShareModal: React.FC<ShareModalProps> = ({
     params.set('role', role);
     if (!isAllYears && sortedSelected.length > 0) {
       params.set('year', sortedSelected.map(y => y.id).join(','));
+    }
+    if (hideBadge) {
+      params.set('banner', 'hide');
+    } else if (bannerBadge.trim()) {
+      params.set('banner', bannerBadge.trim());
+    }
+    if (customTitle.trim()) {
+      params.set('title', customTitle.trim());
     }
     return `${baseUrl}?${params.toString()}`;
   };
@@ -132,6 +217,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({
     const names = sortedSelected.map(y => y.label).join(' and ');
     return `Dedicated combined link for ${names}. Students and parents will only see these ${sortedSelected.length} classes and can easily toggle between them; all other year groups remain hidden.`;
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
@@ -301,6 +388,211 @@ export const ShareModal: React.FC<ShareModalProps> = ({
           <p className="text-[11px] text-slate-500 mt-2.5 font-medium">
             💡 Tip: Click any combination of classes (e.g. <strong>Year 10 & Year 11</strong>) to generate a targeted link. Students opening the link will only see those classes.
           </p>
+        </div>
+
+        {/* Banner Display Customization Card */}
+        <div className="p-4 rounded-xl border border-indigo-100 bg-indigo-50/40 space-y-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                <Tag className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  <span>Student Portal Banner Display</span>
+                  <span className="text-[10px] font-mono-code font-bold uppercase tracking-wider bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full">
+                    Custom Label
+                  </span>
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Define what label students see on the banner badge (e.g. <strong>IGCSE</strong> instead of "Shared Classes")
+                </p>
+              </div>
+            </div>
+
+            {/* Hide Badge Quick Toggle */}
+            <button
+              type="button"
+              onClick={() => setHideBadge(!hideBadge)}
+              className={`text-xs px-2.5 py-1 rounded-lg font-medium border transition-colors cursor-pointer flex items-center gap-1.5 ${
+                hideBadge 
+                  ? 'bg-amber-100 border-amber-300 text-amber-900 font-bold' 
+                  : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {hideBadge ? '🚫 Badge Hidden on Banner' : 'Show Banner Badge'}
+            </button>
+          </div>
+
+          {!hideBadge && (
+            <div className="space-y-2.5">
+              {/* Text Input for Custom Banner Label */}
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-1">
+                  Banner Badge Text:
+                </label>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={bannerBadge}
+                      onChange={(e) => setBannerBadge(e.target.value)}
+                      placeholder={sortedSelected.some(y => y.id === 'y10' || y.id === 'y11') ? "e.g. IGCSE" : "e.g. IGCSE, Key Stage 3..."}
+                      className="w-full text-xs font-mono-code bg-white text-slate-900 border border-slate-300 rounded-lg pl-3 pr-8 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                    {bannerBadge && (
+                      <button
+                        type="button"
+                        onClick={() => setBannerBadge('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 text-xs cursor-pointer"
+                        title="Reset to default"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  {bannerBadge !== 'IGCSE' && (
+                    <button
+                      type="button"
+                      onClick={() => { setBannerBadge('IGCSE'); setHideBadge(false); }}
+                      className="px-3 py-2 text-xs font-mono-code font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg cursor-pointer transition-colors shadow-2xs flex-shrink-0"
+                    >
+                      Set "IGCSE"
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Quick Suggestion Chips */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                <span className="text-[11px] font-semibold text-slate-500 mr-1">Suggested:</span>
+                {suggestedPills.map((pill) => (
+                  <button
+                    key={pill.value}
+                    type="button"
+                    onClick={() => { setBannerBadge(pill.value); setHideBadge(false); }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-mono-code transition-all cursor-pointer border ${
+                      bannerBadge === pill.value
+                        ? 'bg-indigo-600 text-white border-indigo-700 font-bold shadow-2xs'
+                        : pill.isHighlighted
+                        ? 'bg-indigo-100 text-indigo-900 border-indigo-300 font-bold hover:bg-indigo-200'
+                        : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-200 font-medium'
+                    }`}
+                  >
+                    {pill.label}
+                  </button>
+                ))}
+                {bannerBadge && (
+                  <button
+                    type="button"
+                    onClick={() => setBannerBadge('')}
+                    className="px-2 py-1 rounded-lg text-xs font-mono-code text-slate-500 hover:text-slate-800 bg-white hover:bg-slate-100 border border-slate-200 transition-colors cursor-pointer"
+                  >
+                    Default (Shared Classes)
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Optional Custom Heading */}
+          <div className="pt-2 border-t border-indigo-100/80">
+            <details className="group">
+              <summary className="text-xs font-semibold text-indigo-700 cursor-pointer hover:text-indigo-900 list-none flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Type className="w-3.5 h-3.5" />
+                  <span>Customize Portal Heading Title (Optional)</span>
+                </span>
+                <span className="text-[10px] text-slate-400 group-open:rotate-180 transition-transform">▼</span>
+              </summary>
+              <div className="mt-2 pt-2 space-y-2">
+                <input
+                  type="text"
+                  value={customTitle}
+                  onChange={(e) => setCustomTitle(e.target.value)}
+                  placeholder={overviewSettings?.portalTitle || "Computing Syllabus & Curriculum Timeline"}
+                  className="w-full text-xs bg-white text-slate-900 border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCustomTitle(`${bannerBadge || 'IGCSE'} Computing Curriculum`)}
+                    className="text-[11px] font-mono-code text-indigo-600 hover:underline cursor-pointer"
+                  >
+                    Use "{bannerBadge || 'IGCSE'} Computing Curriculum"
+                  </button>
+                  {customTitle && (
+                    <button
+                      type="button"
+                      onClick={() => setCustomTitle('')}
+                      className="text-[11px] text-slate-500 hover:text-slate-700 cursor-pointer ml-auto"
+                    >
+                      Clear custom title
+                    </button>
+                  )}
+                </div>
+              </div>
+            </details>
+          </div>
+
+          {/* Live Student Banner Preview */}
+          <div className="mt-2 p-3.5 rounded-xl bg-slate-900 text-white border border-slate-800 shadow-inner">
+            <div className="flex items-center justify-between text-[10px] font-mono-code text-indigo-300 uppercase tracking-wider mb-2 border-b border-white/10 pb-1.5">
+              <span className="flex items-center gap-1.5 font-bold text-slate-200">
+                <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Live Preview: What Students Will See On The Banner</span>
+              </span>
+              <span className="text-emerald-400 font-bold">Preview</span>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-mono-code font-bold uppercase tracking-wider">
+                  <GraduationCap className="w-3 h-3" />
+                  <span>{overviewSettings?.academicYearLabel || 'Academic Year 2026–2027'}</span>
+                </span>
+
+                {effectivePreviewBadge && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/40 text-[10px] font-mono-code font-bold uppercase tracking-wider">
+                    <Tag className="w-2.5 h-2.5 text-indigo-300" />
+                    <span>{effectivePreviewBadge}</span>
+                  </span>
+                )}
+
+                <span className="text-[10px] text-indigo-200/70 font-mono-code">Student & Parent Portal</span>
+              </div>
+
+              <div className="font-display font-bold text-sm text-white truncate">
+                {effectivePreviewTitle}
+              </div>
+
+              <div className="pt-2 border-t border-white/10 flex items-center gap-2 text-[11px] font-mono-code">
+                <span className="text-indigo-200 uppercase font-bold text-[10px]">
+                  {sortedSelected.length === 1 ? 'Curriculum Year Level:' : 'Choose Your Year Level:'}
+                </span>
+                {effectivePreviewBadge ? (
+                  <span className="bg-white/20 text-white px-2 py-0.5 rounded-full border border-white/20 font-bold text-[10px] flex items-center gap-1">
+                    <Tag className="w-2.5 h-2.5 text-indigo-300" />
+                    <span>{effectivePreviewBadge}</span>
+                    {sortedSelected.length > 1 && (
+                      <span className="text-indigo-200 font-normal">({sortedSelected.map(y => y.short).join(' & ')})</span>
+                    )}
+                  </span>
+                ) : hideBadge ? (
+                  <span className="text-white/40 text-[10px] italic">(Badge Hidden)</span>
+                ) : null}
+              </div>
+            </div>
+
+            {effectivePreviewBadge && (
+              <div className="mt-2 text-[10px] text-emerald-400 font-mono-code flex items-center gap-1 border-t border-white/10 pt-1.5">
+                <Check className="w-3 h-3" />
+                <span>
+                  Replaces "Shared Classes" with <strong>"{effectivePreviewBadge}"</strong> on the banner.
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Links List */}
