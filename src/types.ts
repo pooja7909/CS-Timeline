@@ -113,6 +113,7 @@ export interface PortalOverviewSettings {
   portalTitle: string;
   portalDescription: string;
   academicYearLabel: string;
+  defaultBannerLabel?: string;
 }
 
 export interface CurriculumState {
