@@ -150,6 +150,23 @@ export default function App() {
     return 'highlight';
   });
 
+  // Teacher-defined custom banner parameters from URL (e.g. ?banner=IGCSE&title=...)
+  const [customBannerLabel, setCustomBannerLabel] = useState<string | null>(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get('banner') || urlParams.get('badge');
+    } catch {}
+    return null;
+  });
+
+  const [customBannerTitle, setCustomBannerTitle] = useState<string | null>(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get('title') || urlParams.get('bannerTitle');
+    } catch {}
+    return null;
+  });
+
   const handleToggleCompletionDisplayMode = () => {
     setCompletionDisplayMode(prev => {
       const next: CompletionDisplayMode = prev === 'highlight' ? 'both' : prev === 'both' ? 'strike' : 'highlight';
@@ -234,6 +251,15 @@ export default function App() {
         if (parsed.length > 0) {
           setSelectedYears(parsed);
         }
+      }
+
+      const bannerParam = urlParams.get('banner') || urlParams.get('badge');
+      if (bannerParam !== null) {
+        setCustomBannerLabel(bannerParam);
+      }
+      const titleParam = urlParams.get('title') || urlParams.get('bannerTitle');
+      if (titleParam !== null) {
+        setCustomBannerTitle(titleParam);
       }
 
       // Case 1: Student link shared with students & parents (?role=student)
@@ -913,6 +939,8 @@ export default function App() {
               currentWeekText={currentWeekText}
               isManualWeek={isManualWeek}
               overviewSettings={overviewSettings}
+              customBannerLabel={customBannerLabel}
+              customBannerTitle={customBannerTitle}
               onOpenStaffLogin={() => setIsTeacherAuthOpen(true)}
               userRole={userRole}
               isTeacherAuthenticated={isTeacherAuthenticated}
@@ -1099,6 +1127,7 @@ export default function App() {
         selectedYears={selectedYears}
         initialYears={selectedYears}
         initialYear={selectedYears.length === 1 ? selectedYears[0] : (selectedYears.length > 0 && selectedYears.length < YEARS.length ? selectedYears[0] : 'all')}
+        overviewSettings={overviewSettings}
       />
 
       <StatsModal
