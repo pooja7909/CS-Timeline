@@ -1,6 +1,3 @@
-// NOTE: This Express server is for local/dev and auxiliary API functionality.
-// Production curriculum persistence is Firebase Firestore.
-// Do NOT use the file-based `data/curriculum-store.json` as production storage on Vercel.
 import express from "express";
 import path from "path";
 import fs from "fs";
