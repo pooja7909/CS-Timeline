@@ -85,7 +85,6 @@ export default function App() {
   const [assessOnly, setAssessOnly] = useState(false);
   const [reportOnly, setReportOnly] = useState(false);
 
-  // Default to student role for all visitors
   const [userRole, setUserRole] = useState<UserRole>('student');
   const [isTeacherAuthenticated, setIsTeacherAuthenticated] = useState<boolean>(false);
 
@@ -105,7 +104,6 @@ export default function App() {
     return DEFAULT_STUDENT_VISIBILITY;
   });
 
-  // Active School Week Setting (Automatic vs. Manual Teacher Override)
   const [activeWeekSetting, setActiveWeekSetting] = useState<ActiveWeekSetting>(() => {
     try {
       const saved = localStorage.getItem('curriculum_active_week_setting');
@@ -119,7 +117,6 @@ export default function App() {
     return DEFAULT_ACTIVE_WEEK_SETTING;
   });
 
-  // Portal Overview Title, Description & Academic Year tag
   const [overviewSettings, setOverviewSettings] = useState<PortalOverviewSettings>(() => {
     try {
       const saved = localStorage.getItem('curriculum_overview_settings');
@@ -133,7 +130,6 @@ export default function App() {
     return DEFAULT_OVERVIEW_SETTINGS;
   });
 
-  // Modal states
   const [isLockModalOpen, setIsLockModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
@@ -164,13 +160,10 @@ export default function App() {
     currentText: string;
   } | null>(null);
 
-  // References
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Safe lock state accessor
   const isLocked = Boolean(lockState?.isLocked) || (userRole === 'teacher' && !isTeacherAuthenticated);
 
-  // Dynamic real-time school week calculation
   const currentWeekInfo = useMemo(() => {
     return getActiveSchoolWeek(plan, activeWeekSetting);
   }, [plan, activeWeekSetting]);
@@ -180,7 +173,6 @@ export default function App() {
   const currentWeekKey = currentWeekInfo.weekKey;
   const isManualWeek = currentWeekInfo.isManual;
 
-  // Validate teacher session token against server
   const verifyTeacherSession = async (token: string): Promise<boolean> => {
     try {
       const res = await fetch('/api/teacher/session', {
@@ -193,7 +185,6 @@ export default function App() {
     }
   };
 
-  // Secure Role & Session handling on mount
   useEffect(() => {
     const initAuth = async () => {
       const token = sessionStorage.getItem('bisb_teacher_token');
@@ -205,7 +196,6 @@ export default function App() {
         setSelectedYears([yearParam]);
       }
 
-      // Student link
       if (requestedRole === 'student') {
         if (token) {
           const isValid = await verifyTeacherSession(token);
@@ -219,7 +209,6 @@ export default function App() {
         return;
       }
 
-      // Main root page / teacher page
       setUserRole('teacher');
 
       if (token) {
@@ -243,7 +232,6 @@ export default function App() {
     initAuth();
   }, []);
 
-  // Teacher Logout
   const handleTeacherLogout = async () => {
     const token = sessionStorage.getItem('bisb_teacher_token');
 
@@ -262,7 +250,6 @@ export default function App() {
     setIsTeacherAuthOpen(true);
   };
 
-  // Real-time Cloud Sync — Firestore is the single source of truth
   useEffect(() => {
     let unsubscribe: () => void = () => {};
 
@@ -328,7 +315,6 @@ export default function App() {
     };
   }, []);
 
-  // Save report dates
   const handleUpdateReportDates = (updatedDates: YearReportDate[]) => {
     if (isLocked && userRole !== 'teacher') return;
 
@@ -357,7 +343,6 @@ export default function App() {
       });
   };
 
-  // Persist plan to Cloud Firestore and localStorage cache
   const triggerSave = useCallback(
     (updatedPlan: TermData[]) => {
       try {
@@ -397,7 +382,6 @@ export default function App() {
     [lockState, studentVisibility]
   );
 
-  // Update a single curriculum cell
   const handleUpdateCell = (
     termId: string,
     weekN: number,
@@ -443,7 +427,6 @@ export default function App() {
     });
   };
 
-  // Update a weekly departmental note
   const handleUpdateNote = (
     termId: string,
     weekN: number,
@@ -475,21 +458,7 @@ export default function App() {
     });
   };
 
-  // ============================================================
-  // UPDATE WEEK TAG / MILESTONE
-  // ============================================================
-  //
-  // This is the missing connection that caused the Add Tag
-  // feature not to save.
-  //
-  // StudentView already has the UI for:
-  //   + Add Tag
-  //   Edit Tag
-  //   Remove Tag
-  //
-  // This function updates WeekRow.flag and sends the complete
-  // updated plan through the existing Firebase save process.
-  //
+  // Week-level Tag / Milestone update
   const handleUpdateFlag = (
     termId: string,
     weekN: number,
@@ -518,14 +487,12 @@ export default function App() {
         };
       });
 
-      // Save the updated tag to Firebase
       triggerSave(nextPlan);
 
       return nextPlan;
     });
   };
 
-  // Open Add Break Modal
   const handleOpenAddBreak = (termId: string) => {
     const term = plan.find(t => t.id === termId);
 
@@ -537,7 +504,6 @@ export default function App() {
     });
   };
 
-  // Open Edit Break Modal
   const handleOpenEditBreak = (
     termId: string,
     breakItem: BreakRow,
@@ -554,7 +520,6 @@ export default function App() {
     });
   };
 
-  // Save / Add Break Box
   const handleSaveBreak = (
     termId: string,
     updatedBreak: BreakRow,
@@ -595,7 +560,6 @@ export default function App() {
     }));
   };
 
-  // Delete Break Box
   const handleDeleteBreak = (
     termId: string,
     positionIdx: number
@@ -635,7 +599,6 @@ export default function App() {
     }));
   };
 
-  // Quick Toggle Break Visibility for students
   const handleToggleBreakVisibility = (
     termId: string,
     positionIdx: number,
@@ -673,7 +636,6 @@ export default function App() {
     });
   };
 
-  // Save Student Visibility Settings
   const handleSaveStudentVisibility = (
     newSettings: StudentVisibilitySettings
   ) => {
@@ -708,7 +670,6 @@ export default function App() {
       });
   };
 
-  // Save Active Week Setting
   const handleSaveActiveWeekSetting = (
     newSetting: ActiveWeekSetting
   ) => {
@@ -744,7 +705,6 @@ export default function App() {
       });
   };
 
-  // Save Portal Overview Settings
   const handleSaveOverviewSettings = (
     newSettings: PortalOverviewSettings
   ) => {
@@ -781,7 +741,6 @@ export default function App() {
       });
   };
 
-  // Lock / Unlock toggle via Firestore
   const handleToggleLock = async (
     shouldLock: boolean,
     pin?: string,
@@ -834,7 +793,6 @@ export default function App() {
     }
   };
 
-  // Reset to default syllabus
   const handleReset = async () => {
     if (isLocked) {
       alert(
@@ -883,7 +841,6 @@ export default function App() {
     }
   };
 
-  // Year filter toggle
   const handleToggleYear = (yearId: string) => {
     setSelectedYears(prev => {
       if (prev.includes(yearId)) {
@@ -896,7 +853,6 @@ export default function App() {
     });
   };
 
-  // Stage preset filter
   const handleSelectStage = (
     stage: 'all' | 'ks3' | 'ks4' | 'ks5'
   ) => {
@@ -913,7 +869,6 @@ export default function App() {
     }
   };
 
-  // Export handlers
   const handleExport = (
     format: 'md' | 'csv' | 'print'
   ) => {
@@ -1034,7 +989,6 @@ export default function App() {
     }
   };
 
-  // Jump to active school week
   const handleJumpCurrentWeek = () => {
     const currentWeekElement =
       document.getElementById(
@@ -1070,7 +1024,6 @@ export default function App() {
       <div className="max-w-[1540px] mx-auto px-4 sm:px-6 pt-6">
 
         {userRole === 'student' ? (
-          /* Dedicated Student & Parent Experience */
           <main>
             <StudentView
               plan={plan}
@@ -1103,14 +1056,7 @@ export default function App() {
                 studentVisibility
               }
               reportDates={reportDates}
-
-              {/* IMPORTANT:
-                  This connects the Week Tag UI to the
-                  Firebase persistence handler. */}
-              onUpdateFlag={
-                handleUpdateFlag
-              }
-
+              onUpdateFlag={handleUpdateFlag}
               onEditBreak={
                 handleOpenEditBreak
               }
@@ -1135,9 +1081,7 @@ export default function App() {
             />
           </main>
         ) : (
-          /* Teacher / Department Planner Experience */
           <>
-            {/* Header */}
             <Header
               userRole={userRole}
               lockState={lockState}
@@ -1173,7 +1117,6 @@ export default function App() {
               }
             />
 
-            {/* 38-Week Interactive Signature Strip */}
             <div className="mb-6">
               <YearStrip
                 plan={plan}
@@ -1186,7 +1129,6 @@ export default function App() {
               />
             </div>
 
-            {/* Toolbar */}
             <Toolbar
               viewMode={viewMode}
               onViewModeChange={
@@ -1246,7 +1188,6 @@ export default function App() {
               }
             />
 
-            {/* Main Interactive Views */}
             <main className="mt-6">
 
               {viewMode === 'matrix' && (
@@ -1389,8 +1330,6 @@ export default function App() {
           </>
         )}
       </div>
-
-      {/* Modals */}
 
       <LockModal
         isOpen={
