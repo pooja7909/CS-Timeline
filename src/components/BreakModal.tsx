@@ -26,11 +26,13 @@ interface BreakModalProps {
 
 const CATEGORY_PRESETS = [
   'School Holiday',
+  'Major Submissions',
   'Half Term Break',
   'Public Holiday',
   'Staff Training / INSET',
   'Revision & Study Week',
-  'Exam Period Break'
+  'Exam Period Break',
+  'Milestone'
 ];
 
 export const BreakModal: React.FC<BreakModalProps> = ({
