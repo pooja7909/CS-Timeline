@@ -1026,7 +1026,7 @@ export const StudentView: React.FC<StudentViewProps> = ({
                                       setFlagInputVal('');
                                     }}
                                     title="Add a week milestone or event badge"
-                                    className="text-[10px] text-slate-400 hover:text-amber-700 font-medium inline-flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                                    className="text-[10px] text-amber-700 hover:text-amber-900 font-semibold inline-flex items-center gap-1 cursor-pointer"
                                   >
                                     <Plus className="w-3 h-3" />
                                     <span>Add Tag</span>
