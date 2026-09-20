@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { TermData, YearConfig, CellData, ViewMode, UserRole, LockState, CurriculumState, YearReportDate, BreakRow, StudentVisibilitySettings, ActiveWeekSetting, PortalOverviewSettings, CompletionDisplayMode } from './types';
+import { TermData, YearConfig, CellData, ViewMode, UserRole, LockState, CurriculumState, YearReportDate, BreakRow, StudentVisibilitySettings, ActiveWeekSetting, PortalOverviewSettings } from './types';
 import { YEARS, INITIAL_PLAN } from './data/defaultPlan';
 import { DEFAULT_YEAR_REPORT_DATES } from './data/reportCycles';
 import { DEFAULT_OVERVIEW_SETTINGS, DEFAULT_ACTIVE_WEEK_SETTING, DEFAULT_STUDENT_VISIBILITY } from './data/defaultSettings';
@@ -72,15 +72,9 @@ export default function App() {
   const [selectedYears, setSelectedYears] = useState<string[]>(() => {
     try {
       const urlParams = new URLSearchParams(window.location.search);
-      const urlYear = urlParams.get('year') || urlParams.get('years');
-      if (urlYear && urlYear !== 'all') {
-        const parsed = urlYear
-          .split(',')
-          .map(s => s.trim().toLowerCase())
-          .filter(s => YEARS.some(y => y.id === s));
-        if (parsed.length > 0) {
-          return parsed;
-        }
+      const urlYear = urlParams.get('year');
+      if (urlYear && YEARS.some(y => y.id === urlYear)) {
+        return [urlYear];
       }
     } catch {}
     return YEARS.map(y => y.id);
@@ -138,44 +132,6 @@ export default function App() {
     } catch {}
     return DEFAULT_OVERVIEW_SETTINGS;
   });
-
-  // Completion Display Mode (both: cross + highlight, strike: strikethrough only, highlight: highlight only)
-  const [completionDisplayMode, setCompletionDisplayMode] = useState<CompletionDisplayMode>(() => {
-    try {
-      const saved = localStorage.getItem('curriculum_completion_mode');
-      if (saved === 'both' || saved === 'strike' || saved === 'highlight') {
-        return saved;
-      }
-    } catch {}
-    return 'highlight';
-  });
-
-  // Teacher-defined custom banner parameters from URL (e.g. ?banner=IGCSE&title=...)
-  const [customBannerLabel, setCustomBannerLabel] = useState<string | null>(() => {
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      return urlParams.get('banner') || urlParams.get('badge');
-    } catch {}
-    return null;
-  });
-
-  const [customBannerTitle, setCustomBannerTitle] = useState<string | null>(() => {
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      return urlParams.get('title') || urlParams.get('bannerTitle');
-    } catch {}
-    return null;
-  });
-
-  const handleToggleCompletionDisplayMode = () => {
-    setCompletionDisplayMode(prev => {
-      const next: CompletionDisplayMode = prev === 'highlight' ? 'both' : prev === 'both' ? 'strike' : 'highlight';
-      try {
-        localStorage.setItem('curriculum_completion_mode', next);
-      } catch {}
-      return next;
-    });
-  };
 
   // Modal states
   const [isLockModalOpen, setIsLockModalOpen] = useState(false);
@@ -241,25 +197,10 @@ export default function App() {
       const token = sessionStorage.getItem('bisb_teacher_token');
       const urlParams = new URLSearchParams(window.location.search);
       const requestedRole = urlParams.get('role');
-      const yearParam = urlParams.get('year') || urlParams.get('years');
+      const yearParam = urlParams.get('year');
 
-      if (yearParam && yearParam !== 'all') {
-        const parsed = yearParam
-          .split(',')
-          .map(s => s.trim().toLowerCase())
-          .filter(s => YEARS.some(y => y.id === s));
-        if (parsed.length > 0) {
-          setSelectedYears(parsed);
-        }
-      }
-
-      const bannerParam = urlParams.get('banner') || urlParams.get('badge');
-      if (bannerParam !== null) {
-        setCustomBannerLabel(bannerParam);
-      }
-      const titleParam = urlParams.get('title') || urlParams.get('bannerTitle');
-      if (titleParam !== null) {
-        setCustomBannerTitle(titleParam);
+      if (yearParam && YEARS.some(y => y.id === yearParam)) {
+        setSelectedYears([yearParam]);
       }
 
       // Case 1: Student link shared with students & parents (?role=student)
@@ -316,7 +257,7 @@ export default function App() {
     setIsTeacherAuthOpen(true);
   };
 
-  // Real-time Cloud Sync (Firestore) with server/localStorage fallback
+  // Real-time Cloud Sync — Firestore is the single source of truth
   useEffect(() => {
     let unsubscribe: () => void = () => {};
 
@@ -347,22 +288,11 @@ export default function App() {
           }
         },
         (error) => {
-          console.warn('Firestore subscription offline, falling back to REST sync:', error);
-          fetch('/api/curriculum')
-            .then(res => res.json())
-            .then((data: CurriculumState) => {
-              if (data && Array.isArray(data.plan)) {
-                setPlan(data.plan);
-                if (Array.isArray(data.reportDates)) setReportDates(data.reportDates);
-                if (data.lock && typeof data.lock.isLocked === 'boolean') setLockState(data.lock);
-                if (data.studentVisibility) setStudentVisibility(prev => ({ ...prev, ...data.studentVisibility }));
-                if (data.activeWeekSetting) setActiveWeekSetting(prev => ({ ...prev, ...data.activeWeekSetting }));
-                if (data.overviewSettings) setOverviewSettings(prev => ({ ...prev, ...data.overviewSettings }));
-                if (data.lastUpdated) setLastUpdated(data.lastUpdated);
-                setSyncStatus('synced');
-              }
-            })
-            .catch(() => {});
+          // IMPORTANT: Never fall back to /api/curriculum here.
+          // That endpoint uses non-persistent server memory on Vercel and can
+          // reintroduce INITIAL_PLAN after a cold start.
+          console.error('Firestore subscription error. Keeping current local state:', error);
+          setSyncStatus('error');
         }
       );
     } catch (e) {
@@ -376,7 +306,7 @@ export default function App() {
     };
   }, []);
 
-  // Save report dates to Cloud Firestore, server, and localStorage
+  // Save report dates to Cloud Firestore and localStorage cache
   const handleUpdateReportDates = (updatedDates: YearReportDate[]) => {
     if (isLocked && userRole !== 'teacher') return;
     setReportDates(updatedDates);
@@ -391,25 +321,13 @@ export default function App() {
         setLastUpdated(res.lastUpdated);
         setSyncStatus('synced');
       })
-      .catch(() => {
-        fetch('/api/curriculum', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reportDates: updatedDates })
-        })
-          .then(res => res.json())
-          .then(data => {
-            if (data.lastUpdated) setLastUpdated(data.lastUpdated);
-            setSyncStatus('synced');
-          })
-          .catch((err) => {
-            console.warn('Sync server offline, persisted locally:', err);
-            setSyncStatus('synced');
-          });
+      .catch((err) => {
+        console.error('Failed to save report dates to Firestore:', err);
+        setSyncStatus('error');
       });
   };
 
-  // Persist plan to Cloud Firestore, server API, and localStorage
+  // Persist plan to Cloud Firestore and localStorage cache
   const triggerSave = useCallback((updatedPlan: TermData[]) => {
     try {
       localStorage.setItem('curriculum_plan_v2', JSON.stringify(updatedPlan));
@@ -425,28 +343,14 @@ export default function App() {
         const cloudResult = await saveCurriculumToCloud(updatedPlan, undefined, lockState, studentVisibility);
         setLastUpdated(cloudResult.lastUpdated);
         setSyncStatus('synced');
-      } catch {
-        // Server fallback
-        try {
-          const res = await fetch('/api/curriculum', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ plan: updatedPlan })
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            setLastUpdated(data.lastUpdated);
-            setSyncStatus('synced');
-          } else {
-            setSyncStatus('synced');
-          }
-        } catch {
-          setSyncStatus('synced');
-        }
+      } catch (err) {
+        // IMPORTANT: Do not save to /api/curriculum.
+        // Vercel serverless memory is not durable and may reset to INITIAL_PLAN.
+        console.error('Failed to save curriculum plan to Firestore:', err);
+        setSyncStatus('error');
       }
     }, 400);
-  }, [lockState]);
+  }, [lockState, studentVisibility]);
 
   // Update a single cell
   const handleUpdateCell = (
@@ -498,88 +402,6 @@ export default function App() {
             return {
               ...row,
               note: noteText
-            };
-          })
-        };
-      });
-
-      triggerSave(nextPlan);
-      return nextPlan;
-    });
-  };
-
-  // Update a week flag/milestone badge (e.g. "Major Submissions", "Ends Wed · 12 noon finish")
-  const handleUpdateFlag = (termId: string, weekN: number, flagText: string) => {
-    if (isLocked && userRole !== 'teacher') return;
-
-    setPlan(prevPlan => {
-      const nextPlan = prevPlan.map(term => {
-        if (term.id !== termId) return term;
-        return {
-          ...term,
-          rows: term.rows.map(row => {
-            if (row.kind !== 'week' || row.n !== weekN) return row;
-            return {
-              ...row,
-              flag: flagText.trim() ? flagText.trim() : undefined
-            };
-          })
-        };
-      });
-
-      triggerSave(nextPlan);
-      return nextPlan;
-    });
-  };
-
-  // Toggle week completed status
-  const handleToggleWeekComplete = (termId: string, weekN: number) => {
-    if (isLocked && userRole !== 'teacher') return;
-
-    setPlan(prevPlan => {
-      const nextPlan = prevPlan.map(term => {
-        if (term.id !== termId) return term;
-        return {
-          ...term,
-          rows: term.rows.map(row => {
-            if (row.kind !== 'week' || row.n !== weekN) return row;
-            const newCompleted = !row.completed;
-            return {
-              ...row,
-              completed: newCompleted,
-              completedAt: newCompleted ? new Date().toISOString() : undefined
-            };
-          })
-        };
-      });
-
-      triggerSave(nextPlan);
-      return nextPlan;
-    });
-  };
-
-  // Toggle individual cohort cell taught / completed status
-  const handleToggleCellTaught = (termId: string, weekN: number, yearId: string) => {
-    if (isLocked && userRole !== 'teacher') return;
-
-    setPlan(prevPlan => {
-      const nextPlan = prevPlan.map(term => {
-        if (term.id !== termId) return term;
-        return {
-          ...term,
-          rows: term.rows.map(row => {
-            if (row.kind !== 'week' || row.n !== weekN) return row;
-            const currentCell = row.cells[yearId] || { text: '' };
-            const newTaught = !currentCell.taught;
-            return {
-              ...row,
-              cells: {
-                ...row.cells,
-                [yearId]: {
-                  ...currentCell,
-                  taught: newTaught
-                }
-              }
             };
           })
         };
@@ -702,8 +524,8 @@ export default function App() {
         setSyncStatus('synced');
       })
       .catch((err) => {
-        console.warn('Cloud save error for student visibility, saved locally:', err);
-        setSyncStatus('synced');
+        console.error('Failed to save student visibility to Firestore:', err);
+        setSyncStatus('error');
       });
   };
 
@@ -720,18 +542,9 @@ export default function App() {
         setLastUpdated(res.lastUpdated);
         setSyncStatus('synced');
       })
-      .catch(() => {
-        fetch('/api/curriculum', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ activeWeekSetting: newSetting })
-        })
-          .then(res => res.json())
-          .then(data => {
-            if (data.lastUpdated) setLastUpdated(data.lastUpdated);
-            setSyncStatus('synced');
-          })
-          .catch(() => setSyncStatus('synced'));
+      .catch((err) => {
+        console.error('Failed to save active week setting to Firestore:', err);
+        setSyncStatus('error');
       });
   };
 
@@ -748,18 +561,9 @@ export default function App() {
         setLastUpdated(res.lastUpdated);
         setSyncStatus('synced');
       })
-      .catch(() => {
-        fetch('/api/curriculum', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ overviewSettings: newSettings })
-        })
-          .then(res => res.json())
-          .then(data => {
-            if (data.lastUpdated) setLastUpdated(data.lastUpdated);
-            setSyncStatus('synced');
-          })
-          .catch(() => setSyncStatus('synced'));
+      .catch((err) => {
+        console.error('Failed to save overview settings to Firestore:', err);
+        setSyncStatus('error');
       });
   };
 
@@ -784,13 +588,10 @@ export default function App() {
         localStorage.setItem('curriculum_lock_state', JSON.stringify({ ...newLockState, pin: pin || '2026' }));
       } catch {}
       return { success: true };
-    } catch {
-      // Fallback
-      setLockState(newLockState);
-      try {
-        localStorage.setItem('curriculum_lock_state', JSON.stringify({ ...newLockState, pin: pin || '2026' }));
-      } catch {}
-      return { success: true };
+    } catch (err) {
+      console.error('Failed to save lock state to Firestore:', err);
+      setSyncStatus('error');
+      return { success: false, error: 'Could not save the lock state to Firebase. Please try again.' };
     }
   };
 
@@ -812,9 +613,10 @@ export default function App() {
       setPlan(resetPlan);
       setReportDates(resetReportDates);
       setSyncStatus('synced');
-    } catch {
-      setPlan(resetPlan);
-      setReportDates(resetReportDates);
+    } catch (err) {
+      console.error('Failed to reset curriculum in Firestore:', err);
+      setSyncStatus('error');
+      alert('The reset could not be saved to Firebase, so your curriculum was not reset.');
     }
   };
 
@@ -939,33 +741,17 @@ export default function App() {
               currentWeekText={currentWeekText}
               isManualWeek={isManualWeek}
               overviewSettings={overviewSettings}
-              customBannerLabel={customBannerLabel}
-              customBannerTitle={customBannerTitle}
               onOpenStaffLogin={() => setIsTeacherAuthOpen(true)}
               userRole={userRole}
               isTeacherAuthenticated={isTeacherAuthenticated}
-              lockedToYear={new URLSearchParams(window.location.search).get('year') || new URLSearchParams(window.location.search).get('years')}
-              lockedToYears={(() => {
-                try {
-                  const p = new URLSearchParams(window.location.search).get('year') || new URLSearchParams(window.location.search).get('years');
-                  if (p && p !== 'all') {
-                    const parsed = p.split(',').map(s => s.trim().toLowerCase()).filter(s => YEARS.some(y => y.id === s));
-                    return parsed.length > 0 ? parsed : null;
-                  }
-                } catch {}
-                return null;
-              })()}
               onReturnToTeacherPage={() => setUserRole('teacher')}
               onLogoutTeacher={handleTeacherLogout}
               visibilitySettings={studentVisibility}
               reportDates={reportDates}
-              completionDisplayMode={completionDisplayMode}
-              onToggleWeekComplete={handleToggleWeekComplete}
               onEditBreak={handleOpenEditBreak}
               onDeleteBreak={handleDeleteBreak}
               onToggleBreakVisibility={handleToggleBreakVisibility}
               onAddBreak={handleOpenAddBreak}
-              onUpdateFlag={handleUpdateFlag}
               onOpenVisibilitySettings={() => setIsVisibilityModalOpen(true)}
               onOpenActiveWeekModal={() => setIsActiveWeekModalOpen(true)}
               onOpenOverviewModal={() => setIsOverviewModalOpen(true)}
@@ -985,7 +771,6 @@ export default function App() {
               isManualWeek={isManualWeek}
               overviewSettings={overviewSettings}
               isTeacherAuthenticated={isTeacherAuthenticated}
-              selectedYears={selectedYears}
               onJumpCurrentWeek={handleJumpCurrentWeek}
               onOpenActiveWeekModal={() => setIsActiveWeekModalOpen(true)}
               onOpenOverviewModal={() => setIsOverviewModalOpen(true)}
@@ -1019,8 +804,6 @@ export default function App() {
               onToggleAssessOnly={() => setAssessOnly(prev => !prev)}
               reportOnly={reportOnly}
               onToggleReportOnly={() => setReportOnly(prev => !prev)}
-              completionDisplayMode={completionDisplayMode}
-              onToggleCompletionDisplayMode={handleToggleCompletionDisplayMode}
               userRole={userRole}
               onToggleRole={() => setUserRole('student')}
               lockState={lockState}
@@ -1048,15 +831,11 @@ export default function App() {
                   currentWeekKey={currentWeekKey}
                   onUpdateCell={handleUpdateCell}
                   onUpdateNote={handleUpdateNote}
-                  onToggleWeekComplete={handleToggleWeekComplete}
-                  onToggleCellTaught={handleToggleCellTaught}
-                  completionDisplayMode={completionDisplayMode}
                   onOpenAiHelper={(cell) => setAiHelperCell(cell)}
                   onEditBreak={handleOpenEditBreak}
                   onDeleteBreak={handleDeleteBreak}
                   onToggleBreakVisibility={handleToggleBreakVisibility}
                   onAddBreak={handleOpenAddBreak}
-                  onUpdateFlag={handleUpdateFlag}
                 />
               )}
 
@@ -1073,10 +852,6 @@ export default function App() {
                   currentWeekKey={currentWeekKey}
                   onUpdateCell={handleUpdateCell}
                   onUpdateNote={handleUpdateNote}
-                  onUpdateFlag={handleUpdateFlag}
-                  onToggleWeekComplete={handleToggleWeekComplete}
-                  onToggleCellTaught={handleToggleCellTaught}
-                  completionDisplayMode={completionDisplayMode}
                   onOpenAiHelper={(cell) => setAiHelperCell(cell)}
                   onEditBreak={handleOpenEditBreak}
                   onDeleteBreak={handleDeleteBreak}
@@ -1124,10 +899,7 @@ export default function App() {
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
         isLocked={isLocked}
-        selectedYears={selectedYears}
-        initialYears={selectedYears}
-        initialYear={selectedYears.length === 1 ? selectedYears[0] : (selectedYears.length > 0 && selectedYears.length < YEARS.length ? selectedYears[0] : 'all')}
-        overviewSettings={overviewSettings}
+        initialYear={selectedYears.length === 1 ? selectedYears[0] : 'all'}
       />
 
       <StatsModal
