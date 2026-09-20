@@ -84,7 +84,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [assessOnly, setAssessOnly] = useState(false);
   const [reportOnly, setReportOnly] = useState(false);
-  
+
   // Default to student role for all visitors
   const [userRole, setUserRole] = useState<UserRole>('student');
   const [isTeacherAuthenticated, setIsTeacherAuthenticated] = useState<boolean>(false);
@@ -141,6 +141,7 @@ export default function App() {
   const [isVisibilityModalOpen, setIsVisibilityModalOpen] = useState(false);
   const [isActiveWeekModalOpen, setIsActiveWeekModalOpen] = useState(false);
   const [isOverviewModalOpen, setIsOverviewModalOpen] = useState(false);
+
   const [breakModalData, setBreakModalData] = useState<{
     isOpen: boolean;
     termId: string;
@@ -153,6 +154,7 @@ export default function App() {
     termName: '',
     breakItem: null
   });
+
   const [aiHelperCell, setAiHelperCell] = useState<{
     termId: string;
     weekN: number;
@@ -168,7 +170,7 @@ export default function App() {
   // Safe lock state accessor
   const isLocked = Boolean(lockState?.isLocked) || (userRole === 'teacher' && !isTeacherAuthenticated);
 
-  // Dynamic real-time school week calculation (smart 2026–2027 calendar tracking with teacher manual override)
+  // Dynamic real-time school week calculation
   const currentWeekInfo = useMemo(() => {
     return getActiveSchoolWeek(plan, activeWeekSetting);
   }, [plan, activeWeekSetting]);
@@ -203,8 +205,7 @@ export default function App() {
         setSelectedYears([yearParam]);
       }
 
-      // Case 1: Student link shared with students & parents (?role=student)
-      // Completely read-only with NO staff login prompts or buttons
+      // Student link
       if (requestedRole === 'student') {
         if (token) {
           const isValid = await verifyTeacherSession(token);
@@ -212,25 +213,27 @@ export default function App() {
         } else {
           setIsTeacherAuthenticated(false);
         }
+
         setUserRole('student');
         setIsTeacherAuthOpen(false);
         return;
       }
 
-      // Case 2: Main root page or ?role=teacher -> DEFAULT LANDING IS TEACHER PAGE!
+      // Main root page / teacher page
       setUserRole('teacher');
 
       if (token) {
         const isValid = await verifyTeacherSession(token);
+
         if (isValid) {
           setIsTeacherAuthenticated(true);
           setIsTeacherAuthOpen(false);
           return;
-        } else {
-          sessionStorage.removeItem('bisb_teacher_token');
-          setIsTeacherAuthenticated(false);
-          setIsTeacherAuthOpen(true);
         }
+
+        sessionStorage.removeItem('bisb_teacher_token');
+        setIsTeacherAuthenticated(false);
+        setIsTeacherAuthOpen(true);
       } else {
         setIsTeacherAuthenticated(false);
         setIsTeacherAuthOpen(true);
@@ -240,9 +243,10 @@ export default function App() {
     initAuth();
   }, []);
 
-  // Teacher Logout / Lock Session Handler
+  // Teacher Logout
   const handleTeacherLogout = async () => {
     const token = sessionStorage.getItem('bisb_teacher_token');
+
     if (token) {
       try {
         await fetch('/api/teacher/logout', {
@@ -251,6 +255,7 @@ export default function App() {
         });
       } catch {}
     }
+
     sessionStorage.removeItem('bisb_teacher_token');
     setIsTeacherAuthenticated(false);
     setUserRole('teacher');
@@ -266,32 +271,49 @@ export default function App() {
         (cloudState) => {
           if (cloudState && Array.isArray(cloudState.plan)) {
             setPlan(cloudState.plan);
+
             if (Array.isArray(cloudState.reportDates)) {
               setReportDates(cloudState.reportDates);
             }
+
             if (cloudState.lock && typeof cloudState.lock.isLocked === 'boolean') {
               setLockState(cloudState.lock);
             }
+
             if (cloudState.studentVisibility) {
-              setStudentVisibility(prev => ({ ...prev, ...cloudState.studentVisibility }));
+              setStudentVisibility(prev => ({
+                ...prev,
+                ...cloudState.studentVisibility
+              }));
             }
+
             if (cloudState.activeWeekSetting) {
-              setActiveWeekSetting(prev => ({ ...prev, ...cloudState.activeWeekSetting }));
+              setActiveWeekSetting(prev => ({
+                ...prev,
+                ...cloudState.activeWeekSetting
+              }));
             }
+
             if (cloudState.overviewSettings) {
-              setOverviewSettings(prev => ({ ...prev, ...cloudState.overviewSettings }));
+              setOverviewSettings(prev => ({
+                ...prev,
+                ...cloudState.overviewSettings
+              }));
             }
+
             if (cloudState.lastUpdated) {
               setLastUpdated(cloudState.lastUpdated);
             }
+
             setSyncStatus('synced');
           }
         },
         (error) => {
-          // IMPORTANT: Never fall back to /api/curriculum here.
-          // That endpoint uses non-persistent server memory on Vercel and can
-          // reintroduce INITIAL_PLAN after a cold start.
-          console.error('Firestore subscription error. Keeping current local state:', error);
+          console.error(
+            'Firestore subscription error. Keeping current local state:',
+            error
+          );
+
           setSyncStatus('error');
         }
       );
@@ -306,53 +328,76 @@ export default function App() {
     };
   }, []);
 
-  // Save report dates to Cloud Firestore and localStorage cache
+  // Save report dates
   const handleUpdateReportDates = (updatedDates: YearReportDate[]) => {
     if (isLocked && userRole !== 'teacher') return;
+
     setReportDates(updatedDates);
+
     try {
-      localStorage.setItem('curriculum_report_dates_v2', JSON.stringify(updatedDates));
+      localStorage.setItem(
+        'curriculum_report_dates_v2',
+        JSON.stringify(updatedDates)
+      );
     } catch {}
+
     setSyncStatus('saving');
 
-    // Direct Cloud Firestore save (preserve existing lock state)
     saveCurriculumToCloud(undefined, updatedDates, lockState)
       .then((res) => {
         setLastUpdated(res.lastUpdated);
         setSyncStatus('synced');
       })
       .catch((err) => {
-        console.error('Failed to save report dates to Firestore:', err);
+        console.error(
+          'Failed to save report dates to Firestore:',
+          err
+        );
         setSyncStatus('error');
       });
   };
 
   // Persist plan to Cloud Firestore and localStorage cache
-  const triggerSave = useCallback((updatedPlan: TermData[]) => {
-    try {
-      localStorage.setItem('curriculum_plan_v2', JSON.stringify(updatedPlan));
-    } catch {}
-    setSyncStatus('saving');
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
-    saveTimeoutRef.current = setTimeout(async () => {
+  const triggerSave = useCallback(
+    (updatedPlan: TermData[]) => {
       try {
-        // Direct Cloud Save (always maintain currently unlocked/locked state & student visibility)
-        const cloudResult = await saveCurriculumToCloud(updatedPlan, undefined, lockState, studentVisibility);
-        setLastUpdated(cloudResult.lastUpdated);
-        setSyncStatus('synced');
-      } catch (err) {
-        // IMPORTANT: Do not save to /api/curriculum.
-        // Vercel serverless memory is not durable and may reset to INITIAL_PLAN.
-        console.error('Failed to save curriculum plan to Firestore:', err);
-        setSyncStatus('error');
-      }
-    }, 400);
-  }, [lockState, studentVisibility]);
+        localStorage.setItem(
+          'curriculum_plan_v2',
+          JSON.stringify(updatedPlan)
+        );
+      } catch {}
 
-  // Update a single cell
+      setSyncStatus('saving');
+
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+
+      saveTimeoutRef.current = setTimeout(async () => {
+        try {
+          const cloudResult = await saveCurriculumToCloud(
+            updatedPlan,
+            undefined,
+            lockState,
+            studentVisibility
+          );
+
+          setLastUpdated(cloudResult.lastUpdated);
+          setSyncStatus('synced');
+        } catch (err) {
+          console.error(
+            'Failed to save curriculum plan to Firestore:',
+            err
+          );
+
+          setSyncStatus('error');
+        }
+      }, 400);
+    },
+    [lockState, studentVisibility]
+  );
+
+  // Update a single curriculum cell
   const handleUpdateCell = (
     termId: string,
     weekN: number,
@@ -364,11 +409,21 @@ export default function App() {
     setPlan(prevPlan => {
       const nextPlan = prevPlan.map(term => {
         if (term.id !== termId) return term;
+
         return {
           ...term,
           rows: term.rows.map(row => {
-            if (row.kind !== 'week' || row.n !== weekN) return row;
-            const currentCell = row.cells[yearId] || { text: '' };
+            if (row.kind !== 'week' || row.n !== weekN) {
+              return row;
+            }
+
+            const currentCell =
+              row.cells[yearId] || {
+                text: '',
+                assess: false,
+                taught: false
+              };
+
             return {
               ...row,
               cells: {
@@ -389,16 +444,24 @@ export default function App() {
   };
 
   // Update a weekly departmental note
-  const handleUpdateNote = (termId: string, weekN: number, noteText: string) => {
+  const handleUpdateNote = (
+    termId: string,
+    weekN: number,
+    noteText: string
+  ) => {
     if (isLocked && userRole !== 'teacher') return;
 
     setPlan(prevPlan => {
       const nextPlan = prevPlan.map(term => {
         if (term.id !== termId) return term;
+
         return {
           ...term,
           rows: term.rows.map(row => {
-            if (row.kind !== 'week' || row.n !== weekN) return row;
+            if (row.kind !== 'week' || row.n !== weekN) {
+              return row;
+            }
+
             return {
               ...row,
               note: noteText
@@ -412,9 +475,60 @@ export default function App() {
     });
   };
 
+  // ============================================================
+  // UPDATE WEEK TAG / MILESTONE
+  // ============================================================
+  //
+  // This is the missing connection that caused the Add Tag
+  // feature not to save.
+  //
+  // StudentView already has the UI for:
+  //   + Add Tag
+  //   Edit Tag
+  //   Remove Tag
+  //
+  // This function updates WeekRow.flag and sends the complete
+  // updated plan through the existing Firebase save process.
+  //
+  const handleUpdateFlag = (
+    termId: string,
+    weekN: number,
+    flag: string
+  ) => {
+    if (isLocked && userRole !== 'teacher') return;
+
+    setPlan(prevPlan => {
+      const nextPlan = prevPlan.map(term => {
+        if (term.id !== termId) {
+          return term;
+        }
+
+        return {
+          ...term,
+          rows: term.rows.map(row => {
+            if (row.kind !== 'week' || row.n !== weekN) {
+              return row;
+            }
+
+            return {
+              ...row,
+              flag: flag.trim() || undefined
+            };
+          })
+        };
+      });
+
+      // Save the updated tag to Firebase
+      triggerSave(nextPlan);
+
+      return nextPlan;
+    });
+  };
+
   // Open Add Break Modal
   const handleOpenAddBreak = (termId: string) => {
     const term = plan.find(t => t.id === termId);
+
     setBreakModalData({
       isOpen: true,
       termId,
@@ -424,8 +538,13 @@ export default function App() {
   };
 
   // Open Edit Break Modal
-  const handleOpenEditBreak = (termId: string, breakItem: BreakRow, positionIdx: number) => {
+  const handleOpenEditBreak = (
+    termId: string,
+    breakItem: BreakRow,
+    positionIdx: number
+  ) => {
     const term = plan.find(t => t.id === termId);
+
     setBreakModalData({
       isOpen: true,
       termId,
@@ -436,18 +555,29 @@ export default function App() {
   };
 
   // Save / Add Break Box
-  const handleSaveBreak = (termId: string, updatedBreak: BreakRow, positionIdx?: number) => {
+  const handleSaveBreak = (
+    termId: string,
+    updatedBreak: BreakRow,
+    positionIdx?: number
+  ) => {
     if (isLocked && userRole !== 'teacher') return;
 
     setPlan(prevPlan => {
       const nextPlan = prevPlan.map(term => {
         if (term.id !== termId) return term;
+
         const newRows = [...term.rows];
-        if (positionIdx !== undefined && positionIdx >= 0 && positionIdx < newRows.length) {
+
+        if (
+          positionIdx !== undefined &&
+          positionIdx >= 0 &&
+          positionIdx < newRows.length
+        ) {
           newRows[positionIdx] = updatedBreak;
         } else {
           newRows.push(updatedBreak);
         }
+
         return {
           ...term,
           rows: newRows
@@ -455,23 +585,39 @@ export default function App() {
       });
 
       triggerSave(nextPlan);
+
       return nextPlan;
     });
 
-    setBreakModalData(prev => ({ ...prev, isOpen: false }));
+    setBreakModalData(prev => ({
+      ...prev,
+      isOpen: false
+    }));
   };
 
   // Delete Break Box
-  const handleDeleteBreak = (termId: string, positionIdx: number) => {
+  const handleDeleteBreak = (
+    termId: string,
+    positionIdx: number
+  ) => {
     if (isLocked && userRole !== 'teacher') return;
-    if (!window.confirm('Are you sure you want to delete this holiday / break box?')) {
+
+    if (
+      !window.confirm(
+        'Are you sure you want to delete this holiday / break box?'
+      )
+    ) {
       return;
     }
 
     setPlan(prevPlan => {
       const nextPlan = prevPlan.map(term => {
         if (term.id !== termId) return term;
-        const newRows = term.rows.filter((_, idx) => idx !== positionIdx);
+
+        const newRows = term.rows.filter(
+          (_, idx) => idx !== positionIdx
+        );
+
         return {
           ...term,
           rows: newRows
@@ -479,26 +625,42 @@ export default function App() {
       });
 
       triggerSave(nextPlan);
+
       return nextPlan;
     });
 
-    setBreakModalData(prev => ({ ...prev, isOpen: false }));
+    setBreakModalData(prev => ({
+      ...prev,
+      isOpen: false
+    }));
   };
 
   // Quick Toggle Break Visibility for students
-  const handleToggleBreakVisibility = (termId: string, positionIdx: number, newVisibility: boolean) => {
+  const handleToggleBreakVisibility = (
+    termId: string,
+    positionIdx: number,
+    newVisibility: boolean
+  ) => {
     if (isLocked && userRole !== 'teacher') return;
 
     setPlan(prevPlan => {
       const nextPlan = prevPlan.map(term => {
         if (term.id !== termId) return term;
+
         const newRows = term.rows.map((row, idx) => {
-          if (idx !== positionIdx || row.kind !== 'break') return row;
+          if (
+            idx !== positionIdx ||
+            row.kind !== 'break'
+          ) {
+            return row;
+          }
+
           return {
             ...row,
             visibleToStudents: newVisibility
           };
         });
+
         return {
           ...term,
           rows: newRows
@@ -506,68 +668,120 @@ export default function App() {
       });
 
       triggerSave(nextPlan);
+
       return nextPlan;
     });
   };
 
   // Save Student Visibility Settings
-  const handleSaveStudentVisibility = (newSettings: StudentVisibilitySettings) => {
+  const handleSaveStudentVisibility = (
+    newSettings: StudentVisibilitySettings
+  ) => {
     setStudentVisibility(newSettings);
+
     try {
-      localStorage.setItem('curriculum_student_visibility', JSON.stringify(newSettings));
+      localStorage.setItem(
+        'curriculum_student_visibility',
+        JSON.stringify(newSettings)
+      );
     } catch {}
+
     setSyncStatus('saving');
 
-    saveCurriculumToCloud(undefined, undefined, lockState, newSettings)
+    saveCurriculumToCloud(
+      undefined,
+      undefined,
+      lockState,
+      newSettings
+    )
       .then((res) => {
         setLastUpdated(res.lastUpdated);
         setSyncStatus('synced');
       })
       .catch((err) => {
-        console.error('Failed to save student visibility to Firestore:', err);
+        console.error(
+          'Failed to save student visibility to Firestore:',
+          err
+        );
+
         setSyncStatus('error');
       });
   };
 
-  // Save Active Week Setting (Auto / Manual)
-  const handleSaveActiveWeekSetting = (newSetting: ActiveWeekSetting) => {
+  // Save Active Week Setting
+  const handleSaveActiveWeekSetting = (
+    newSetting: ActiveWeekSetting
+  ) => {
     setActiveWeekSetting(newSetting);
+
     try {
-      localStorage.setItem('curriculum_active_week_setting', JSON.stringify(newSetting));
+      localStorage.setItem(
+        'curriculum_active_week_setting',
+        JSON.stringify(newSetting)
+      );
     } catch {}
+
     setSyncStatus('saving');
 
-    saveCurriculumToCloud(undefined, undefined, lockState, undefined, newSetting)
+    saveCurriculumToCloud(
+      undefined,
+      undefined,
+      lockState,
+      undefined,
+      newSetting
+    )
       .then((res) => {
         setLastUpdated(res.lastUpdated);
         setSyncStatus('synced');
       })
       .catch((err) => {
-        console.error('Failed to save active week setting to Firestore:', err);
+        console.error(
+          'Failed to save active week setting to Firestore:',
+          err
+        );
+
         setSyncStatus('error');
       });
   };
 
-  // Save Portal Overview Settings (Title, Description, Academic Year)
-  const handleSaveOverviewSettings = (newSettings: PortalOverviewSettings) => {
+  // Save Portal Overview Settings
+  const handleSaveOverviewSettings = (
+    newSettings: PortalOverviewSettings
+  ) => {
     setOverviewSettings(newSettings);
+
     try {
-      localStorage.setItem('curriculum_overview_settings', JSON.stringify(newSettings));
+      localStorage.setItem(
+        'curriculum_overview_settings',
+        JSON.stringify(newSettings)
+      );
     } catch {}
+
     setSyncStatus('saving');
 
-    saveCurriculumToCloud(undefined, undefined, lockState, undefined, undefined, newSettings)
+    saveCurriculumToCloud(
+      undefined,
+      undefined,
+      lockState,
+      undefined,
+      undefined,
+      newSettings
+    )
       .then((res) => {
         setLastUpdated(res.lastUpdated);
         setSyncStatus('synced');
       })
       .catch((err) => {
-        console.error('Failed to save overview settings to Firestore:', err);
+        console.error(
+          'Failed to save overview settings to Firestore:',
+          err
+        );
+
         setSyncStatus('error');
       });
   };
 
-  // Lock / Unlock toggle via API & Firestore
+  // Lock / Unlock toggle via Firestore
   const handleToggleLock = async (
     shouldLock: boolean,
     pin?: string,
@@ -576,47 +790,96 @@ export default function App() {
     const newLockState: LockState = {
       isLocked: shouldLock,
       hasPin: true,
-      lockedBy: shouldLock ? 'Computing Department' : undefined,
-      lockedAt: shouldLock ? new Date().toISOString() : undefined
+      lockedBy: shouldLock
+        ? 'Computing Department'
+        : undefined,
+      lockedAt: shouldLock
+        ? new Date().toISOString()
+        : undefined
     };
 
     try {
-      // Cloud Firestore save
-      await saveCurriculumToCloud(undefined, undefined, newLockState);
+      await saveCurriculumToCloud(
+        undefined,
+        undefined,
+        newLockState
+      );
+
       setLockState(newLockState);
+
       try {
-        localStorage.setItem('curriculum_lock_state', JSON.stringify({ ...newLockState, pin: pin || '2026' }));
+        localStorage.setItem(
+          'curriculum_lock_state',
+          JSON.stringify({
+            ...newLockState,
+            pin: pin || '2026'
+          })
+        );
       } catch {}
+
       return { success: true };
     } catch (err) {
-      console.error('Failed to save lock state to Firestore:', err);
+      console.error(
+        'Failed to save lock state to Firestore:',
+        err
+      );
+
       setSyncStatus('error');
-      return { success: false, error: 'Could not save the lock state to Firebase. Please try again.' };
+
+      return {
+        success: false,
+        error:
+          'Could not save the lock state to Firebase. Please try again.'
+      };
     }
   };
 
   // Reset to default syllabus
   const handleReset = async () => {
     if (isLocked) {
-      alert('Timeline is currently locked. Please unlock first to reset.');
-      return;
-    }
-    if (!window.confirm('Reset all 38 weeks and 7 year levels back to the default curriculum? Your custom edits will be replaced.')) {
+      alert(
+        'Timeline is currently locked. Please unlock first to reset.'
+      );
       return;
     }
 
-    const resetPlan = JSON.parse(JSON.stringify(INITIAL_PLAN));
-    const resetReportDates = JSON.parse(JSON.stringify(DEFAULT_YEAR_REPORT_DATES));
+    if (
+      !window.confirm(
+        'Reset all 38 weeks and 7 year levels back to the default curriculum? Your custom edits will be replaced.'
+      )
+    ) {
+      return;
+    }
+
+    const resetPlan = JSON.parse(
+      JSON.stringify(INITIAL_PLAN)
+    );
+
+    const resetReportDates = JSON.parse(
+      JSON.stringify(DEFAULT_YEAR_REPORT_DATES)
+    );
 
     try {
-      await saveCurriculumToCloud(resetPlan, resetReportDates, lockState);
+      await saveCurriculumToCloud(
+        resetPlan,
+        resetReportDates,
+        lockState
+      );
+
       setPlan(resetPlan);
       setReportDates(resetReportDates);
       setSyncStatus('synced');
     } catch (err) {
-      console.error('Failed to reset curriculum in Firestore:', err);
+      console.error(
+        'Failed to reset curriculum in Firestore:',
+        err
+      );
+
       setSyncStatus('error');
-      alert('The reset could not be saved to Firebase, so your curriculum was not reset.');
+
+      alert(
+        'The reset could not be saved to Firebase, so your curriculum was not reset.'
+      );
     }
   };
 
@@ -624,86 +887,147 @@ export default function App() {
   const handleToggleYear = (yearId: string) => {
     setSelectedYears(prev => {
       if (prev.includes(yearId)) {
-        if (prev.length === 1) return prev; // keep at least 1 year visible
+        if (prev.length === 1) return prev;
+
         return prev.filter(id => id !== yearId);
       }
+
       return [...prev, yearId];
     });
   };
 
   // Stage preset filter
-  const handleSelectStage = (stage: 'all' | 'ks3' | 'ks4' | 'ks5') => {
+  const handleSelectStage = (
+    stage: 'all' | 'ks3' | 'ks4' | 'ks5'
+  ) => {
     if (stage === 'all') {
-      setSelectedYears(YEARS.map(y => y.id));
+      setSelectedYears(
+        YEARS.map(y => y.id)
+      );
     } else {
-      setSelectedYears(YEARS.filter(y => y.stage === stage).map(y => y.id));
+      setSelectedYears(
+        YEARS
+          .filter(y => y.stage === stage)
+          .map(y => y.id)
+      );
     }
   };
 
   // Export handlers
-  const handleExport = (format: 'md' | 'csv' | 'print') => {
+  const handleExport = (
+    format: 'md' | 'csv' | 'print'
+  ) => {
     if (format === 'print') {
       window.print();
       return;
     }
 
     if (format === 'csv') {
-      let csvContent = 'data:text/csv;charset=utf-8,Term,Week,Dates,Holiday/Flag,';
-      csvContent += YEARS.map(y => `"${y.label}"`).join(',') + '\n';
+      let csvContent =
+        'data:text/csv;charset=utf-8,Term,Week,Dates,Holiday/Flag,';
+
+      csvContent +=
+        YEARS
+          .map(y => `"${y.label}"`)
+          .join(',') + '\n';
 
       plan.forEach(term => {
         term.rows.forEach(row => {
           if (row.kind === 'break') {
-            csvContent += `"${term.name}","Holiday","${row.dates}","${row.label}",,,,,,\n`;
+            csvContent +=
+              `"${term.name}","Holiday","${row.dates}","${row.label}",,,,,,\n`;
           } else {
             const cells = YEARS.map(y => {
               const cell = row.cells[y.id];
-              const text = cell ? cell.text.replace(/"/g, '""') : '';
+
+              const text = cell
+                ? cell.text.replace(/"/g, '""')
+                : '';
+
               return `"${text}"`;
             }).join(',');
-            csvContent += `"${term.name}","Week ${row.n}","${row.dates}","${row.flag || ''}",${cells}\n`;
+
+            csvContent +=
+              `"${term.name}","Week ${row.n}","${row.dates}","${row.flag || ''}",${cells}\n`;
           }
         });
       });
 
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement('a');
-      link.setAttribute('href', encodedUri);
-      link.setAttribute('download', 'bisb_computing_curriculum_2026_2027.csv');
+      const encodedUri =
+        encodeURI(csvContent);
+
+      const link =
+        document.createElement('a');
+
+      link.setAttribute(
+        'href',
+        encodedUri
+      );
+
+      link.setAttribute(
+        'download',
+        'bisb_computing_curriculum_2026_2027.csv'
+      );
+
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+
       return;
     }
 
     if (format === 'md') {
-      let md = `# British International School Budapest — Computing Curriculum 2026–2027\n\n`;
+      let md =
+        `# British International School Budapest — Computing Curriculum 2026–2027\n\n`;
+
       plan.forEach(term => {
-        md += `## ${term.name} (${term.dates})\n\n`;
+        md +=
+          `## ${term.name} (${term.dates})\n\n`;
+
         term.rows.forEach(row => {
           if (row.kind === 'break') {
-            md += `### 🏖️ ${row.label} (${row.dates})\n\n`;
+            md +=
+              `### 🏖️ ${row.label} (${row.dates})\n\n`;
           } else {
-            md += `#### Week ${row.n} (${row.dates}) ${row.flag ? `[${row.flag}]` : ''}\n`;
+            md +=
+              `#### Week ${row.n} (${row.dates}) ${row.flag ? `[${row.flag}]` : ''}\n`;
+
             YEARS.forEach(y => {
               const cell = row.cells[y.id];
+
               if (cell && cell.text) {
-                md += `- **${y.label}**: ${cell.text} ${cell.assess ? '★ (Assessment)' : ''}\n`;
+                md +=
+                  `- **${y.label}**: ${cell.text} ${cell.assess ? '★ (Assessment)' : ''}\n`;
               }
             });
+
             if (row.note) {
-              md += `> _Note: ${row.note}_\n`;
+              md +=
+                `> _Note: ${row.note}_\n`;
             }
-            md += `\n`;
+
+            md += '\n';
           }
         });
       });
 
-      const blob = new Blob([md], { type: 'text/markdown' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
+      const blob =
+        new Blob(
+          [md],
+          { type: 'text/markdown' }
+        );
+
+      const url =
+        URL.createObjectURL(blob);
+
+      const link =
+        document.createElement('a');
+
       link.href = url;
-      link.download = 'bisb_computing_curriculum_2026_2027.md';
+
+      link.download =
+        'bisb_computing_curriculum_2026_2027.md';
+
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -712,49 +1036,102 @@ export default function App() {
 
   // Jump to active school week
   const handleJumpCurrentWeek = () => {
-    const currentWeekElement = document.getElementById(`week-row-${currentWeekKey}`);
+    const currentWeekElement =
+      document.getElementById(
+        `week-row-${currentWeekKey}`
+      );
+
     if (currentWeekElement) {
-      currentWeekElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      currentWeekElement.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
     }
   };
 
-  const handleSelectWeek = (weekKey: string) => {
-    const el = document.getElementById(`week-row-${weekKey}`);
+  const handleSelectWeek = (
+    weekKey: string
+  ) => {
+    const el =
+      document.getElementById(
+        `week-row-${weekKey}`
+      );
+
     if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-24 text-base">
       <div className="max-w-[1540px] mx-auto px-4 sm:px-6 pt-6">
+
         {userRole === 'student' ? (
-          /* Dedicated Student & Parent Experience (100% Read-Only, No Teacher Access) */
+          /* Dedicated Student & Parent Experience */
           <main>
             <StudentView
               plan={plan}
               years={YEARS}
-              selectedYearId={selectedYears[0] || 'y7'}
-              onSelectYear={(yId) => setSelectedYears([yId])}
+              selectedYearId={
+                selectedYears[0] || 'y7'
+              }
+              onSelectYear={(yId) =>
+                setSelectedYears([yId])
+              }
               currentWeekKey={currentWeekKey}
               currentTermName={currentTermName}
               currentWeekText={currentWeekText}
               isManualWeek={isManualWeek}
               overviewSettings={overviewSettings}
-              onOpenStaffLogin={() => setIsTeacherAuthOpen(true)}
+              onOpenStaffLogin={() =>
+                setIsTeacherAuthOpen(true)
+              }
               userRole={userRole}
-              isTeacherAuthenticated={isTeacherAuthenticated}
-              onReturnToTeacherPage={() => setUserRole('teacher')}
-              onLogoutTeacher={handleTeacherLogout}
-              visibilitySettings={studentVisibility}
+              isTeacherAuthenticated={
+                isTeacherAuthenticated
+              }
+              onReturnToTeacherPage={() =>
+                setUserRole('teacher')
+              }
+              onLogoutTeacher={
+                handleTeacherLogout
+              }
+              visibilitySettings={
+                studentVisibility
+              }
               reportDates={reportDates}
-              onEditBreak={handleOpenEditBreak}
-              onDeleteBreak={handleDeleteBreak}
-              onToggleBreakVisibility={handleToggleBreakVisibility}
-              onAddBreak={handleOpenAddBreak}
-              onOpenVisibilitySettings={() => setIsVisibilityModalOpen(true)}
-              onOpenActiveWeekModal={() => setIsActiveWeekModalOpen(true)}
-              onOpenOverviewModal={() => setIsOverviewModalOpen(true)}
+
+              {/* IMPORTANT:
+                  This connects the Week Tag UI to the
+                  Firebase persistence handler. */}
+              onUpdateFlag={
+                handleUpdateFlag
+              }
+
+              onEditBreak={
+                handleOpenEditBreak
+              }
+              onDeleteBreak={
+                handleDeleteBreak
+              }
+              onToggleBreakVisibility={
+                handleToggleBreakVisibility
+              }
+              onAddBreak={
+                handleOpenAddBreak
+              }
+              onOpenVisibilitySettings={() =>
+                setIsVisibilityModalOpen(true)
+              }
+              onOpenActiveWeekModal={() =>
+                setIsActiveWeekModalOpen(true)
+              }
+              onOpenOverviewModal={() =>
+                setIsOverviewModalOpen(true)
+              }
             />
           </main>
         ) : (
@@ -770,14 +1147,30 @@ export default function App() {
               currentWeekText={currentWeekText}
               isManualWeek={isManualWeek}
               overviewSettings={overviewSettings}
-              isTeacherAuthenticated={isTeacherAuthenticated}
-              onJumpCurrentWeek={handleJumpCurrentWeek}
-              onOpenActiveWeekModal={() => setIsActiveWeekModalOpen(true)}
-              onOpenOverviewModal={() => setIsOverviewModalOpen(true)}
-              onLogoutTeacher={handleTeacherLogout}
-              onGoToStudentPage={() => setUserRole('student')}
-              onOpenStaffLogin={() => setIsTeacherAuthOpen(true)}
-              onOpenShareModal={() => setIsShareModalOpen(true)}
+              isTeacherAuthenticated={
+                isTeacherAuthenticated
+              }
+              onJumpCurrentWeek={
+                handleJumpCurrentWeek
+              }
+              onOpenActiveWeekModal={() =>
+                setIsActiveWeekModalOpen(true)
+              }
+              onOpenOverviewModal={() =>
+                setIsOverviewModalOpen(true)
+              }
+              onLogoutTeacher={
+                handleTeacherLogout
+              }
+              onGoToStudentPage={() =>
+                setUserRole('student')
+              }
+              onOpenStaffLogin={() =>
+                setIsTeacherAuthOpen(true)
+              }
+              onOpenShareModal={() =>
+                setIsShareModalOpen(true)
+              }
             />
 
             {/* 38-Week Interactive Signature Strip */}
@@ -787,55 +1180,124 @@ export default function App() {
                 years={YEARS}
                 selectedYears={selectedYears}
                 currentWeekKey={currentWeekKey}
-                onSelectWeek={handleSelectWeek}
+                onSelectWeek={
+                  handleSelectWeek
+                }
               />
             </div>
 
             {/* Toolbar */}
             <Toolbar
               viewMode={viewMode}
-              onViewModeChange={setViewMode}
-              selectedYears={selectedYears}
-              onToggleYear={handleToggleYear}
-              onSelectStage={handleSelectStage}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-              assessOnly={assessOnly}
-              onToggleAssessOnly={() => setAssessOnly(prev => !prev)}
-              reportOnly={reportOnly}
-              onToggleReportOnly={() => setReportOnly(prev => !prev)}
+              onViewModeChange={
+                setViewMode
+              }
+              selectedYears={
+                selectedYears
+              }
+              onToggleYear={
+                handleToggleYear
+              }
+              onSelectStage={
+                handleSelectStage
+              }
+              searchQuery={
+                searchQuery
+              }
+              onSearchChange={
+                setSearchQuery
+              }
+              assessOnly={
+                assessOnly
+              }
+              onToggleAssessOnly={() =>
+                setAssessOnly(prev => !prev)
+              }
+              reportOnly={
+                reportOnly
+              }
+              onToggleReportOnly={() =>
+                setReportOnly(prev => !prev)
+              }
               userRole={userRole}
-              onToggleRole={() => setUserRole('student')}
-              lockState={lockState}
-              onOpenLockModal={() => setIsLockModalOpen(true)}
-              onOpenShareModal={() => setIsShareModalOpen(true)}
-              onOpenStatsModal={() => setIsStatsModalOpen(true)}
-              onOpenVisibilityModal={() => setIsVisibilityModalOpen(true)}
-              onExport={handleExport}
-              onReset={handleReset}
+              onToggleRole={() =>
+                setUserRole('student')
+              }
+              lockState={
+                lockState
+              }
+              onOpenLockModal={() =>
+                setIsLockModalOpen(true)
+              }
+              onOpenShareModal={() =>
+                setIsShareModalOpen(true)
+              }
+              onOpenStatsModal={() =>
+                setIsStatsModalOpen(true)
+              }
+              onOpenVisibilityModal={() =>
+                setIsVisibilityModalOpen(true)
+              }
+              onExport={
+                handleExport
+              }
+              onReset={
+                handleReset
+              }
             />
 
             {/* Main Interactive Views */}
             <main className="mt-6">
+
               {viewMode === 'matrix' && (
                 <MatrixView
                   plan={plan}
                   years={YEARS}
-                  selectedYears={selectedYears}
-                  isLocked={isLocked}
-                  lockState={lockState}
-                  userRole={userRole}
-                  searchQuery={searchQuery}
-                  assessOnly={assessOnly}
-                  reportOnly={reportOnly}
-                  currentWeekKey={currentWeekKey}
-                  onUpdateCell={handleUpdateCell}
-                  onUpdateNote={handleUpdateNote}
-                  onOpenAiHelper={(cell) => setAiHelperCell(cell)}
-                  onEditBreak={handleOpenEditBreak}
-                  onDeleteBreak={handleDeleteBreak}
-                  onToggleBreakVisibility={handleToggleBreakVisibility}
-                  onAddBreak={handleOpenAddBreak}
+                  selectedYears={
+                    selectedYears
+                  }
+                  isLocked={
+                    isLocked
+                  }
+                  lockState={
+                    lockState
+                  }
+                  userRole={
+                    userRole
+                  }
+                  searchQuery={
+                    searchQuery
+                  }
+                  assessOnly={
+                    assessOnly
+                  }
+                  reportOnly={
+                    reportOnly
+                  }
+                  currentWeekKey={
+                    currentWeekKey
+                  }
+                  onUpdateCell={
+                    handleUpdateCell
+                  }
+                  onUpdateNote={
+                    handleUpdateNote
+                  }
+                  onOpenAiHelper={(cell) =>
+                    setAiHelperCell(cell)
+                  }
+                  onEditBreak={
+                    handleOpenEditBreak
+                  }
+                  onDeleteBreak={
+                    handleDeleteBreak
+                  }
+                  onToggleBreakVisibility={
+                    handleToggleBreakVisibility
+                  }
+                  onAddBreak={
+                    handleOpenAddBreak
+                  }
                 />
               )}
 
@@ -843,20 +1305,48 @@ export default function App() {
                 <TimelineView
                   plan={plan}
                   years={YEARS}
-                  selectedYears={selectedYears}
-                  isLocked={isLocked}
-                  lockState={lockState}
-                  userRole={userRole}
-                  searchQuery={searchQuery}
-                  assessOnly={assessOnly}
-                  currentWeekKey={currentWeekKey}
-                  onUpdateCell={handleUpdateCell}
-                  onUpdateNote={handleUpdateNote}
-                  onOpenAiHelper={(cell) => setAiHelperCell(cell)}
-                  onEditBreak={handleOpenEditBreak}
-                  onDeleteBreak={handleDeleteBreak}
-                  onToggleBreakVisibility={handleToggleBreakVisibility}
-                  onAddBreak={handleOpenAddBreak}
+                  selectedYears={
+                    selectedYears
+                  }
+                  isLocked={
+                    isLocked
+                  }
+                  lockState={
+                    lockState
+                  }
+                  userRole={
+                    userRole
+                  }
+                  searchQuery={
+                    searchQuery
+                  }
+                  assessOnly={
+                    assessOnly
+                  }
+                  currentWeekKey={
+                    currentWeekKey
+                  }
+                  onUpdateCell={
+                    handleUpdateCell
+                  }
+                  onUpdateNote={
+                    handleUpdateNote
+                  }
+                  onOpenAiHelper={(cell) =>
+                    setAiHelperCell(cell)
+                  }
+                  onEditBreak={
+                    handleOpenEditBreak
+                  }
+                  onDeleteBreak={
+                    handleDeleteBreak
+                  }
+                  onToggleBreakVisibility={
+                    handleToggleBreakVisibility
+                  }
+                  onAddBreak={
+                    handleOpenAddBreak
+                  }
                 />
               )}
 
@@ -868,50 +1358,90 @@ export default function App() {
                 <RoadmapView
                   plan={plan}
                   years={YEARS}
-                  selectedYears={selectedYears}
+                  selectedYears={
+                    selectedYears
+                  }
                 />
               )}
 
               {viewMode === 'reports' && (
                 <ReportCycleView
-                  reportDates={reportDates}
+                  reportDates={
+                    reportDates
+                  }
                   years={YEARS}
-                  isLocked={isLocked}
-                  lockState={lockState}
-                  userRole={userRole}
-                  onUpdateReportDates={handleUpdateReportDates}
+                  isLocked={
+                    isLocked
+                  }
+                  lockState={
+                    lockState
+                  }
+                  userRole={
+                    userRole
+                  }
+                  onUpdateReportDates={
+                    handleUpdateReportDates
+                  }
                 />
               )}
+
             </main>
           </>
         )}
       </div>
 
       {/* Modals */}
+
       <LockModal
-        isOpen={isLockModalOpen}
-        onClose={() => setIsLockModalOpen(false)}
-        lockState={lockState}
-        onToggleLock={handleToggleLock}
+        isOpen={
+          isLockModalOpen
+        }
+        onClose={() =>
+          setIsLockModalOpen(false)
+        }
+        lockState={
+          lockState
+        }
+        onToggleLock={
+          handleToggleLock
+        }
       />
 
       <ShareModal
-        isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
-        isLocked={isLocked}
-        initialYear={selectedYears.length === 1 ? selectedYears[0] : 'all'}
+        isOpen={
+          isShareModalOpen
+        }
+        onClose={() =>
+          setIsShareModalOpen(false)
+        }
+        isLocked={
+          isLocked
+        }
+        initialYear={
+          selectedYears.length === 1
+            ? selectedYears[0]
+            : 'all'
+        }
       />
 
       <StatsModal
-        isOpen={isStatsModalOpen}
-        onClose={() => setIsStatsModalOpen(false)}
+        isOpen={
+          isStatsModalOpen
+        }
+        onClose={() =>
+          setIsStatsModalOpen(false)
+        }
         plan={plan}
         years={YEARS}
       />
 
       <TeacherAuthModal
-        isOpen={isTeacherAuthOpen}
-        onClose={() => setIsTeacherAuthOpen(false)}
+        isOpen={
+          isTeacherAuthOpen
+        }
+        onClose={() =>
+          setIsTeacherAuthOpen(false)
+        }
         onSuccess={() => {
           setIsTeacherAuthenticated(true);
           setUserRole('teacher');
@@ -919,44 +1449,109 @@ export default function App() {
       />
 
       <BreakModal
-        isOpen={breakModalData.isOpen}
-        onClose={() => setBreakModalData(prev => ({ ...prev, isOpen: false }))}
-        breakData={breakModalData.breakItem}
-        termId={breakModalData.termId}
+        isOpen={
+          breakModalData.isOpen
+        }
+        onClose={() =>
+          setBreakModalData(
+            prev => ({
+              ...prev,
+              isOpen: false
+            })
+          )
+        }
+        breakData={
+          breakModalData.breakItem
+        }
+        termId={
+          breakModalData.termId
+        }
         terms={plan}
-        positionIdx={breakModalData.positionIdx}
-        onSave={(termId, updatedBreak, positionIdx) => handleSaveBreak(termId, updatedBreak, positionIdx)}
-        onDelete={(termId, positionIdx) => handleDeleteBreak(termId, positionIdx)}
+        positionIdx={
+          breakModalData.positionIdx
+        }
+        onSave={(
+          termId,
+          updatedBreak,
+          positionIdx
+        ) =>
+          handleSaveBreak(
+            termId,
+            updatedBreak,
+            positionIdx
+          )
+        }
+        onDelete={(
+          termId,
+          positionIdx
+        ) =>
+          handleDeleteBreak(
+            termId,
+            positionIdx
+          )
+        }
       />
 
       <StudentVisibilityModal
-        isOpen={isVisibilityModalOpen}
-        onClose={() => setIsVisibilityModalOpen(false)}
-        settings={studentVisibility}
-        onSave={handleSaveStudentVisibility}
+        isOpen={
+          isVisibilityModalOpen
+        }
+        onClose={() =>
+          setIsVisibilityModalOpen(false)
+        }
+        settings={
+          studentVisibility
+        }
+        onSave={
+          handleSaveStudentVisibility
+        }
       />
 
       <ActiveWeekModal
-        isOpen={isActiveWeekModalOpen}
-        onClose={() => setIsActiveWeekModalOpen(false)}
+        isOpen={
+          isActiveWeekModalOpen
+        }
+        onClose={() =>
+          setIsActiveWeekModalOpen(false)
+        }
         plan={plan}
-        currentWeekInfo={currentWeekInfo}
-        setting={activeWeekSetting}
-        onSave={handleSaveActiveWeekSetting}
+        currentWeekInfo={
+          currentWeekInfo
+        }
+        setting={
+          activeWeekSetting
+        }
+        onSave={
+          handleSaveActiveWeekSetting
+        }
       />
 
       <PortalOverviewModal
-        isOpen={isOverviewModalOpen}
-        onClose={() => setIsOverviewModalOpen(false)}
-        settings={overviewSettings}
-        onSave={handleSaveOverviewSettings}
+        isOpen={
+          isOverviewModalOpen
+        }
+        onClose={() =>
+          setIsOverviewModalOpen(false)
+        }
+        settings={
+          overviewSettings
+        }
+        onSave={
+          handleSaveOverviewSettings
+        }
       />
 
       {aiHelperCell && (
         <AIHelperModal
-          isOpen={!!aiHelperCell}
-          onClose={() => setAiHelperCell(null)}
-          cellInfo={aiHelperCell}
+          isOpen={
+            !!aiHelperCell
+          }
+          onClose={() =>
+            setAiHelperCell(null)
+          }
+          cellInfo={
+            aiHelperCell
+          }
           onApplySuggestion={(text) => {
             handleUpdateCell(
               aiHelperCell.termId,
@@ -964,6 +1559,7 @@ export default function App() {
               aiHelperCell.yearId,
               { text }
             );
+
             setAiHelperCell(null);
           }}
         />
